@@ -5,6 +5,12 @@ import (
     "github.com/gofiber/fiber/v2"
 )
 
+type Todo struct {
+    id      int     `json:"id"`
+    title   string  `json:"title"`
+    done    bool    `json:"done"`
+    body    string  `json:"body"
+
 func main() {
     fmt.Print("This is a test")
     app := fiber.New()
