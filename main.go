@@ -52,5 +52,9 @@ func main() {
         return c.JSON(todos)
     })
 
+    app.Get("/gotodo/todos", func(c *fiber.Ctx) error {
+        return c.JSON(todos)
+    })
+
     log.Fatal(app.Listen(":8001"))
 }
