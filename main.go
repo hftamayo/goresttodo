@@ -16,6 +16,11 @@ func main() {
     fmt.Print("This is a test")
     app := fiber.New()
 
+    app.Use(cors.New(cors.Config{
+        AllowOrigins: "http://localhost:3000",
+        AllowHeaders: "Origin, Content-Type, Accept",
+    }))
+
     todos := []Todo{}
 
     app.Get("/gotodo/healthcheck", func(c *fiber.Ctx) error {
