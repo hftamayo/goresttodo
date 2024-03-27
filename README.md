@@ -5,3 +5,5 @@
 3. Create frontend with yarn: yarn create vite client -- --template react-ts
 4. Install dependencies: yarn add @mantine/hooks @mantine/core swr @primer/octicons-react
 
+### References ###
+[Original tutorial](https://youtu.be/QevhhM_QfbM?si=u-9zVUAnJWBmWJJY)
