@@ -61,6 +61,28 @@ func main() {
         return c.JSON(todos)
     })
 
+	app.Get("/gotodo/todo/:id", func(c *fiber.Ctx) error {
+		id, err := c.ParamsInt("id")
+		if err != nil {
+			return c.Status(400).SendString("Invalid ID")
+		}
+
+		// Find the todo with the given ID
+		var foundTodo Todo
+		for _, t := range todos {
+			if t.ID == id {
+				foundTodo = t
+				break
+			}
+		}
+
+		if foundTodo.ID == 0 {
+			return c.Status(404).SendString("Todo not found")
+		}
+
+		return c.JSON(foundTodo)
+	})    
+
     app.Delete("/gotodo/todo/:id", func(c *fiber.Ctx) error {
         id, err := c.ParamsInt("id")
 		if err != nil {
