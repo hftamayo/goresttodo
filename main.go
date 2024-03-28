@@ -57,6 +57,40 @@ func main() {
         return c.JSON(todos)
     })
 
+app.Patch("/gotodo/todo/:id", func(c *fiber.Ctx) error {
+		id, err := c.ParamsInt("id")
+		if err != nil {
+			return c.Status(401).SendString("Invalid id")
+		}
+
+		// Find the todo with the given ID
+		var foundTodo *Todo
+		for i, t := range todos {
+			if t.ID == id {
+				foundTodo = &todos[i]
+				break
+			}
+		}
+
+		if foundTodo == nil {
+			return c.Status(404).SendString("Todo not found")
+		}
+
+		// Parse request body to get updated properties
+		var updatedTodo Todo
+		if err := c.BodyParser(&updatedTodo); err != nil {
+			return c.Status(400).SendString("Invalid request body")
+		}
+
+		// Update the properties
+		foundTodo.Title = updatedTodo.Title
+		foundTodo.Done = updatedTodo.Done
+		foundTodo.Body = updatedTodo.Body
+
+		return c.JSON(foundTodo)
+	})
+
+
     app.Get("/gotodo/todos", func(c *fiber.Ctx) error {
         return c.JSON(todos)
     })
