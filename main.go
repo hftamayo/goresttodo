@@ -61,5 +61,31 @@ func main() {
         return c.JSON(todos)
     })
 
+    app.Delete("/gotodo/todo/:id", func(c *fiber.Ctx) error {
+        id, err := c.ParamsInt("id")
+		if err != nil {
+			return c.Status(401).SendString("Invalid id")
+		}
+
+		// Find the index of the todo with the given ID
+		var index int
+		for i, t := range todos {
+			if t.ID == id {
+				index = i
+				break
+			}
+		}
+
+		// Remove the todo from the slice
+		if index >= 0 && index < len(todos) {
+			todos = append(todos[:index], todos[index+1:]...)
+		} else {
+			return c.Status(404).SendString("Todo not found")
+		}
+
+		return c.JSON(todos)
+
+    })
+
     log.Fatal(app.Listen(":8001"))
 }
