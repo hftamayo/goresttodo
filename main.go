@@ -9,10 +9,10 @@ import (
 )
 
 type Todo struct {
-	id    int    `json:"id"`
-	title string `json:"title"`
-	done  bool   `json:"done"`
-	body  string `json:"body"`
+	Id    int    `json:"id"`
+	Title string `json:"title"`
+	Done  bool   `json:"done"`
+	Body  string `json:"body"`
 }
 
 func main() {
