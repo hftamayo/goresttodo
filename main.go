@@ -1,63 +1,66 @@
 package main
+
 import (
-    "fmt"
-    "log"
-    "github.com/gofiber/fiber/v2"
+	"fmt"
+	"log"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 )
 
 type Todo struct {
-    id      int     `json:"id"`
-    title   string  `json:"title"`
-    done    bool    `json:"done"`
-    body    string  `json:"body"`
+	id    int    `json:"id"`
+	title string `json:"title"`
+	done  bool   `json:"done"`
+	body  string `json:"body"`
 }
 
 func main() {
-    fmt.Print("This is a test")
-    app := fiber.New()
+	fmt.Print("This is a test")
+	app := fiber.New()
 
-    app.Use(cors.New(cors.Config{
-        AllowOrigins: "http://localhost:3002",
-        AllowHeaders: "Origin, Content-Type, Accept",
-    }))
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: "http://localhost:3002",
+		AllowHeaders: "Origin, Content-Type, Accept",
+	}))
 
-    todos := []Todo{}
+	todos := []Todo{}
 
-    app.Get("/gotodo/healthcheck", func(c *fiber.Ctx) error {
-        return c.SendString("GoToDo RestAPI is up and running")
-    })
+	app.Get("/gotodo/healthcheck", func(c *fiber.Ctx) error {
+		return c.SendString("GoToDo RestAPI is up and running")
+	})
 
-    app.Post("/gotodo/todos", func(c *fiber.Ctx) error {
-        todo := &Todo{}
+	app.Post("/gotodo/todos", func(c *fiber.Ctx) error {
+		todo := &Todo{}
 
-        if err := c.BodyParser(todo); err != nil {
-            return err
-        }
+		if err := c.BodyParser(todo); err != nil {
+			return err
+		}
 
-        todo.ID = len(todos) + 1
+		todo.id = len(todos) + 1
 
-        todos = append(todos, *todo)
+		todos = append(todos, *todo)
 
-        return c.JSON(todos)
-    })
+		return c.JSON(todos)
+	})
 
-    app.Patch("/gotodo/todo/:id/done", func(c *fiber.Ctx) error {
-        id, err := c.ParamsInt("id")
+	app.Patch("/gotodo/todo/:id/done", func(c *fiber.Ctx) error {
+		id, err := c.ParamsInt("id")
 
-        if err != nil {
-            return c.Status(401).SendString("Invalid id")
-        }
+		if err != nil {
+			return c.Status(401).SendString("Invalid id")
+		}
 
-        for i, t := range todos {
-            if t.ID == id {
-                todos[i].Done = true
-                break
-            }
-        }
-        return c.JSON(todos)
-    })
+		for i, t := range todos {
+			if t.id == id {
+				todos[i].done = true
+				break
+			}
+		}
+		return c.JSON(todos)
+	})
 
-app.Patch("/gotodo/todo/:id", func(c *fiber.Ctx) error {
+	app.Patch("/gotodo/todo/:id", func(c *fiber.Ctx) error {
 		id, err := c.ParamsInt("id")
 		if err != nil {
 			return c.Status(401).SendString("Invalid id")
@@ -66,7 +69,7 @@ app.Patch("/gotodo/todo/:id", func(c *fiber.Ctx) error {
 		// Find the todo with the given ID
 		var foundTodo *Todo
 		for i, t := range todos {
-			if t.ID == id {
+			if t.id == id {
 				foundTodo = &todos[i]
 				break
 			}
@@ -83,17 +86,16 @@ app.Patch("/gotodo/todo/:id", func(c *fiber.Ctx) error {
 		}
 
 		// Update the properties
-		foundTodo.Title = updatedTodo.Title
-		foundTodo.Done = updatedTodo.Done
-		foundTodo.Body = updatedTodo.Body
+		foundTodo.title = updatedTodo.title
+		foundTodo.done = updatedTodo.done
+		foundTodo.body = updatedTodo.body
 
 		return c.JSON(foundTodo)
 	})
 
-
-    app.Get("/gotodo/todos", func(c *fiber.Ctx) error {
-        return c.JSON(todos)
-    })
+	app.Get("/gotodo/todos", func(c *fiber.Ctx) error {
+		return c.JSON(todos)
+	})
 
 	app.Get("/gotodo/todo/:id", func(c *fiber.Ctx) error {
 		id, err := c.ParamsInt("id")
@@ -104,21 +106,21 @@ app.Patch("/gotodo/todo/:id", func(c *fiber.Ctx) error {
 		// Find the todo with the given ID
 		var foundTodo Todo
 		for _, t := range todos {
-			if t.ID == id {
+			if t.id == id {
 				foundTodo = t
 				break
 			}
 		}
 
-		if foundTodo.ID == 0 {
+		if foundTodo.id == 0 {
 			return c.Status(404).SendString("Todo not found")
 		}
 
 		return c.JSON(foundTodo)
-	})    
+	})
 
-    app.Delete("/gotodo/todo/:id", func(c *fiber.Ctx) error {
-        id, err := c.ParamsInt("id")
+	app.Delete("/gotodo/todo/:id", func(c *fiber.Ctx) error {
+		id, err := c.ParamsInt("id")
 		if err != nil {
 			return c.Status(401).SendString("Invalid id")
 		}
@@ -126,7 +128,7 @@ app.Patch("/gotodo/todo/:id", func(c *fiber.Ctx) error {
 		// Find the index of the todo with the given ID
 		var index int
 		for i, t := range todos {
-			if t.ID == id {
+			if t.id == id {
 				index = i
 				break
 			}
@@ -141,7 +143,7 @@ app.Patch("/gotodo/todo/:id", func(c *fiber.Ctx) error {
 
 		return c.JSON(todos)
 
-    })
+	})
 
-    log.Fatal(app.Listen(":8001"))
+	log.Fatal(app.Listen(":8001"))
 }
