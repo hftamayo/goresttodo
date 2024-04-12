@@ -37,7 +37,7 @@ func main() {
 			return err
 		}
 
-		todo.id = len(todos) + 1
+		todo.Id = len(todos) + 1
 
 		todos = append(todos, *todo)
 
@@ -52,8 +52,8 @@ func main() {
 		}
 
 		for i, t := range todos {
-			if t.id == id {
-				todos[i].done = true
+			if t.Id == id {
+				todos[i].Done = true
 				break
 			}
 		}
@@ -69,7 +69,7 @@ func main() {
 		// Find the todo with the given ID
 		var foundTodo *Todo
 		for i, t := range todos {
-			if t.id == id {
+			if t.Id == id {
 				foundTodo = &todos[i]
 				break
 			}
@@ -86,9 +86,9 @@ func main() {
 		}
 
 		// Update the properties
-		foundTodo.title = updatedTodo.title
-		foundTodo.done = updatedTodo.done
-		foundTodo.body = updatedTodo.body
+		foundTodo.Title = updatedTodo.Title
+		foundTodo.Done = updatedTodo.Done
+		foundTodo.Body = updatedTodo.Body
 
 		return c.JSON(foundTodo)
 	})
@@ -106,13 +106,13 @@ func main() {
 		// Find the todo with the given ID
 		var foundTodo Todo
 		for _, t := range todos {
-			if t.id == id {
+			if t.Id == id {
 				foundTodo = t
 				break
 			}
 		}
 
-		if foundTodo.id == 0 {
+		if foundTodo.Id == 0 {
 			return c.Status(404).SendString("Todo not found")
 		}
 
@@ -128,7 +128,7 @@ func main() {
 		// Find the index of the todo with the given ID
 		var index int
 		for i, t := range todos {
-			if t.id == id {
+			if t.Id == id {
 				index = i
 				break
 			}
