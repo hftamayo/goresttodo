@@ -4,6 +4,7 @@
 2. Install fiber v2: go get -u github.com/gofiber/fiber/v2
 3. Create frontend with yarn: yarn create vite client -- --template react-ts
 4. Install dependencies: yarn add @mantine/hooks @mantine/core swr @primer/octicons-react
+5. Run the project: go build main.go | go run main.go
 
 ### References ###
 [Original tutorial](https://youtu.be/QevhhM_QfbM?si=u-9zVUAnJWBmWJJY)
