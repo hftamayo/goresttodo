@@ -1,9 +1,9 @@
 package todo
 
 type TodoRepository interface {
-	GetById(id int) (*TodoModel, error)
-	GetAll() ([]*TodoModel, error)
-	Create(todo *TodoModel) error
-	Update(todo *TodoModel) error
+	GetById(id int) (*Todo, error)
+	GetAll() ([]*Todo, error)
+	Create(todo *Todo) error
+	Update(todo *Todo) error
 	Delete(id int) error
 }
