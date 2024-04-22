@@ -5,19 +5,12 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/jinzhu/gorm"
-	_ "github.com/jinzhu/gorm/dialects/postgres"
+	"github.com/hftamayo/gotodo/api/routes"
+	"github.com/hftamayo/gotodo/pkg/config"
 )
-
-var db *gorm.DB
 
 func main() {
 	var err error
-	db, err = gorm.Open("postgres", "host=localhost port=5432 user=postgres dbname=gotodo password=postgres sslmode=disable")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer db.Close()
 
 	app := fiber.New()
 
@@ -26,7 +19,12 @@ func main() {
 		AllowHeaders: "Origin, Content-Type, Accept",
 	}))
 
-	todos := []Todo{}
+	db, err := config.DataLayerConnect()
+	if err != nil {
+		log.Fatalf("Failed to connect to the database: %v", err)
+	}
+
+	routes.SetupRoutes(app, db)
 
 	app.Get("/gotodo/healthcheck", func(c *fiber.Ctx) error {
 		return c.SendString("GoToDo RestAPI is up and running")
