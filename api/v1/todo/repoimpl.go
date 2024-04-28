@@ -24,9 +24,11 @@ func (r *TodoRepositoryImpl) GetById(id int) (*Todo, error) {
 }
 
 func (r *TodoRepositoryImpl) GetAll() ([]*Todo, error) {
-	// Implement this method.
-	// Query the database for all todos.
-	// Return the todos and nil if successful, or nil and an error if something goes wrong.
+	var todos []*Todo
+	if result := r.db.Find(&todos); result.Error != nil {
+		return nil, result.Error
+	}
+	return todos, nil
 }
 
 func (r *TodoRepositoryImpl) Create(todo *Todo) error {
