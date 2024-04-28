@@ -1,13 +1,26 @@
 package todo
 
+import (
+	"errors"
+
+	"github.com/jinzhu/gorm"
+)
+
 type TodoRepositoryImpl struct {
 	// Fields for database connection go here.
 }
 
 func (r *TodoRepositoryImpl) GetById(id int) (*Todo, error) {
-	// Implement this method.
-	// Query the database for the todo with the given id.
-	// Return the todo and nil if successful, or nil and an error if something goes wrong.
+	var todo Todo
+	if result := r.db.First(&todo, id); result.Error != nil {
+		// If the record is not found, GORM returns a "record not found" error.
+		// You might want to return nil, nil in this case instead of nil, error.
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, result.Error
+	}
+	return &todo, nil
 }
 
 func (r *TodoRepositoryImpl) GetAll() ([]*Todo, error) {
