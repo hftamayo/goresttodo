@@ -7,7 +7,7 @@ import (
 )
 
 type TodoRepositoryImpl struct {
-	// Fields for database connection go here.
+	db *gorm.DB
 }
 
 func (r *TodoRepositoryImpl) GetById(id int) (*Todo, error) {
