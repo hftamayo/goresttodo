@@ -23,9 +23,10 @@ func (r *TodoRepositoryImpl) GetById(id int) (*Todo, error) {
 	return &todo, nil
 }
 
-func (r *TodoRepositoryImpl) GetAll() ([]*Todo, error) {
+func (r *TodoRepositoryImpl) GetAll(page, pageSize int) ([]*Todo, error) {
 	var todos []*Todo
-	if result := r.db.Find(&todos); result.Error != nil {
+	offset := (page - 1) * pageSize
+	if result := r.db.Offset(offset).Limit(pageSize).Find(&todos); result.Error != nil {
 		return nil, result.Error
 	}
 	return todos, nil
