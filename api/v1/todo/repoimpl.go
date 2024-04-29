@@ -32,9 +32,10 @@ func (r *TodoRepositoryImpl) GetAll() ([]*Todo, error) {
 }
 
 func (r *TodoRepositoryImpl) Create(todo *Todo) error {
-	// Implement this method.
-	// Insert the given todo into the database.
-	// Return nil if successful, or an error if something goes wrong.
+	if result := r.db.Create(todo); result.Error != nil {
+		return result.Error
+	}
+	return nil
 }
 
 func (r *TodoRepositoryImpl) Update(todo *Todo) error {
