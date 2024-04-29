@@ -39,9 +39,10 @@ func (r *TodoRepositoryImpl) Create(todo *Todo) error {
 }
 
 func (r *TodoRepositoryImpl) Update(todo *Todo) error {
-	// Implement this method.
-	// Update the given todo in the database.
-	// Return nil if successful, or an error if something goes wrong.
+	if result := r.db.Save(todo); result.Error != nil {
+		return result.Error
+	}
+	return nil
 }
 
 func (r *TodoRepositoryImpl) Delete(id int) error {
