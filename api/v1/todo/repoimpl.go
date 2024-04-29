@@ -46,7 +46,16 @@ func (r *TodoRepositoryImpl) Update(todo *Todo) error {
 }
 
 func (r *TodoRepositoryImpl) Delete(id int) error {
-	// Implement this method.
-	// Delete the todo with the given id from the database.
-	// Return nil if successful, or an error if something goes wrong.
+	todo := &Todo{}
+	if result := r.db.First(todo, id); result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return result.Error
+	}
+
+	if result := r.db.Delete(todo); result.Error != nil {
+		return result.Error
+	}
+	return nil
 }
