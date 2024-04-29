@@ -32,7 +32,7 @@ func UpdateTodo(c *fiber.Ctx) error {
 	}
 
 	// Set the ID of the todo to the ID from the URL parameter.
-	todo.ID = id
+	todo.Id = id
 
 	err = service.UpdateTodo(todo)
 	if err != nil {
