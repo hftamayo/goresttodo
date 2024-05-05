@@ -11,3 +11,7 @@ func NewTodoService(repo TodoRepository) *TodoService {
 func (s *TodoService) CreateTodo(todo *Todo) error {
 	return s.repo.Create(todo)
 }
+
+func (s *TodoService) UpdateTodo(todo *Todo) error {
+	return s.repo.Update(todo)
+}
