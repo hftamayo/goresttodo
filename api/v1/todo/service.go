@@ -45,3 +45,7 @@ func (s *TodoService) MarkTodoAsDone(id int) error {
 	// Save the updated todo in the database.
 	return s.repo.Update(existingTodo)
 }
+
+func (s *TodoService) GetAllTodos() ([]*Todo, error) {
+	return s.repo.GetAll(1, 10)
+}

@@ -70,6 +70,13 @@ func UpdateTodoDone(c *fiber.Ctx) error {
 }
 
 func GetAllTodos(c *fiber.Ctx) error {
+	repo := &TodoRepositoryImpl{}
+	service := NewTodoService(repo)
+	todos, err := service.GetAllTodos()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch tasks", "details": err.Error()})
+	}
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Tasks fetched successfully", "data": todos})
 }
 
 func GetTodoById(c *fiber.Ctx) error {
