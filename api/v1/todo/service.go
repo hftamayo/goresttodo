@@ -53,3 +53,7 @@ func (s *TodoService) GetAllTodos() ([]*Todo, error) {
 func (s *TodoService) GetTodoById(id int) (*Todo, error) {
 	return s.repo.GetById(id)
 }
+
+func (s *TodoService) DeleteTodoById(id int) error {
+	return s.repo.Delete(id)
+}

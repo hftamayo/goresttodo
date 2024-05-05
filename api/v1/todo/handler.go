@@ -97,4 +97,18 @@ func GetTodoById(c *fiber.Ctx) error {
 }
 
 func DeleteTodoById(c *fiber.Ctx) error {
+	repo := &TodoRepositoryImpl{}
+	service := NewTodoService(repo)
+
+	// Parse the ID from the URL parameter.
+	id, err := c.ParamsInt("id")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid ID"})
+	}
+
+	err = service.DeleteTodoById(id)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete task", "details": err.Error()})
+	}
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Task deleted successfully"})
 }
