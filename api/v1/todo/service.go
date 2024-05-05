@@ -49,3 +49,7 @@ func (s *TodoService) MarkTodoAsDone(id int) error {
 func (s *TodoService) GetAllTodos() ([]*Todo, error) {
 	return s.repo.GetAll(1, 10)
 }
+
+func (s *TodoService) GetTodoById(id int) (*Todo, error) {
+	return s.repo.GetById(id)
+}

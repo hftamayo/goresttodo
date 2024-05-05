@@ -80,6 +80,20 @@ func GetAllTodos(c *fiber.Ctx) error {
 }
 
 func GetTodoById(c *fiber.Ctx) error {
+	repo := &TodoRepositoryImpl{}
+	service := NewTodoService(repo)
+
+	// Parse the ID from the URL parameter.
+	id, err := c.ParamsInt("id")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid ID"})
+	}
+
+	todo, err := service.GetTodoById(id)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch task", "details": err.Error()})
+	}
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Task fetched successfully", "data": todo})
 }
 
 func DeleteTodoById(c *fiber.Ctx) error {
