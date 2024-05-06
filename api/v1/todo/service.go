@@ -1,6 +1,8 @@
 package todo
 
-import "errors"
+import (
+	"errors"
+)
 
 type TodoService struct {
 	repo TodoRepository

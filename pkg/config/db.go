@@ -7,10 +7,10 @@ import (
 	"os"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/hftamayo/gotodo/api/v1/models"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/postgres"
 	"github.com/joho/godotenv"
-	"github.com/lib/pq"
 )
 
 var db *gorm.DB
@@ -20,17 +20,18 @@ func DataLayerConnect(app *fiber.App, db *gorm.DB) (*gorm.DB, error) {
 		if err := godotenv.Load(); err != nil {
 			fmt.Println("Error reading context data")
 		}
+		host := os.Getenv("DATABASE_HOST")
+		port := os.Getenv("DATABASE_PORT")
 		user := os.Getenv("DATABASE_USER")
 		password := os.Getenv("DATABASE_PASSWORD")
 		databaseName := os.Getenv("DATABASE_NAME")
 		connectionString := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", host, port, user, password, databaseName)
-		db, err := gorm.Open(pq.Open(connectionString), &gorm.Config{})
+		db, err := gorm.Open("postgres", connectionString)
 		if err != nil {
 			log.Printf("Error connecting to the database.\n%v", err)
 			return nil, err
 		}
 		db.AutoMigrate(&models.User{})
-		DB = db
 		return db, nil
 	} else {
 		return nil, errors.New("running in testing mode")
