@@ -2,12 +2,13 @@ package todo
 
 import (
 	"github.com/gofiber/fiber/v2"
+	"github.com/hftamayo/gotodo/api/v1/models"
 )
 
 func CreateTodo(c *fiber.Ctx) error {
 	repo := &TodoRepositoryImpl{}
 	service := NewTodoService(repo)
-	todo := &Todo{}
+	todo := &models.Todo{}
 	err := service.CreateTodo(todo)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error: failed to create a new task": err.Error()})
@@ -26,7 +27,7 @@ func UpdateTodo(c *fiber.Ctx) error {
 	}
 
 	// Parse the updated todo from the request body.
-	todo := &Todo{}
+	todo := &models.Todo{}
 	if err := c.BodyParser(todo); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
 	}
@@ -53,7 +54,7 @@ func UpdateTodoDone(c *fiber.Ctx) error {
 	}
 
 	// Parse the updated todo from the request body.
-	todo := &Todo{}
+	todo := &models.Todo{}
 	if err := c.BodyParser(todo); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
 	}

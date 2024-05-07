@@ -2,6 +2,8 @@ package todo
 
 import (
 	"errors"
+
+	"github.com/hftamayo/gotodo/api/v1/models"
 )
 
 type TodoService struct {
@@ -12,11 +14,11 @@ func NewTodoService(repo TodoRepository) *TodoService {
 	return &TodoService{repo}
 }
 
-func (s *TodoService) CreateTodo(todo *Todo) error {
+func (s *TodoService) CreateTodo(todo *models.Todo) error {
 	return s.repo.Create(todo)
 }
 
-func (s *TodoService) UpdateTodo(todo *Todo) error {
+func (s *TodoService) UpdateTodo(todo *models.Todo) error {
 	existingTodo, err := s.repo.GetById(todo.Id)
 	if err != nil {
 		return err
@@ -48,11 +50,11 @@ func (s *TodoService) MarkTodoAsDone(id int) error {
 	return s.repo.Update(existingTodo)
 }
 
-func (s *TodoService) GetAllTodos() ([]*Todo, error) {
+func (s *TodoService) GetAllTodos() ([]*models.Todo, error) {
 	return s.repo.GetAll(1, 10)
 }
 
-func (s *TodoService) GetTodoById(id int) (*Todo, error) {
+func (s *TodoService) GetTodoById(id int) (*models.Todo, error) {
 	return s.repo.GetById(id)
 }
 
