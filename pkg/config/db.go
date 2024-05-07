@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/hftamayo/gotodo/api/v1/models"
@@ -21,10 +22,15 @@ func DataLayerConnect(app *fiber.App, db *gorm.DB) (*gorm.DB, error) {
 			fmt.Println("Error reading context data")
 		}
 		host := os.Getenv("DATABASE_HOST")
-		port := os.Getenv("DATABASE_PORT")
+		portStr := os.Getenv("DATABASE_PORT")
 		user := os.Getenv("DATABASE_USER")
 		password := os.Getenv("DATABASE_PASSWORD")
 		databaseName := os.Getenv("DATABASE_NAME")
+		port, err := strconv.Atoi(portStr)
+		if err != nil {
+			log.Printf("Error converting port to integer.\n%v", err)
+			return nil, err
+		}
 		connectionString := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", host, port, user, password, databaseName)
 		db, err := gorm.Open("postgres", connectionString)
 		if err != nil {
