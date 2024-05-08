@@ -15,14 +15,20 @@ func main() {
 	app := fiber.New()
 
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "http://localhost:3002",
-		AllowHeaders: "Origin, Content-Type, Accept",
+		AllowOrigins:     "http://localhost:3002",
+		AllowHeaders:     "Origin, Content-Type, Accept",
+		AllowCredentials: true,
 	}))
 
 	db, err := config.DataLayerConnect()
 	if err != nil {
 		log.Fatalf("Failed to connect to the database: %v", err)
 	}
+
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("db", db)
+		return c.Next()
+	})
 
 	routes.SetupRoutes(app, db)
 
