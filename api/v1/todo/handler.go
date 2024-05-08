@@ -3,7 +3,12 @@ package todo
 import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/hftamayo/gotodo/api/v1/models"
+	"github.com/jinzhu/gorm"
 )
+
+func NewTodoRepositoryImpl(db *gorm.DB) *TodoRepositoryImpl {
+	return &TodoRepositoryImpl{db: db}
+}
 
 func CreateTodo(c *fiber.Ctx) error {
 	repo := &TodoRepositoryImpl{}
@@ -71,7 +76,7 @@ func UpdateTodoDone(c *fiber.Ctx) error {
 }
 
 func GetAllTodos(c *fiber.Ctx) error {
-	repo := &TodoRepositoryImpl{}
+	repo := NewTodoRepositoryImpl(db)
 	service := NewTodoService(repo)
 	todos, err := service.GetAllTodos()
 	if err != nil {
