@@ -11,7 +11,8 @@ func NewTodoRepositoryImpl(db *gorm.DB) *TodoRepositoryImpl {
 }
 
 func CreateTodo(c *fiber.Ctx) error {
-	repo := &TodoRepositoryImpl{}
+	db := c.Locals("db").(*gorm.DB)
+	repo := NewTodoRepositoryImpl(db)
 	service := NewTodoService(repo)
 	todo := &models.Todo{}
 	err := service.CreateTodo(todo)
@@ -22,7 +23,8 @@ func CreateTodo(c *fiber.Ctx) error {
 }
 
 func UpdateTodo(c *fiber.Ctx) error {
-	repo := &TodoRepositoryImpl{}
+	db := c.Locals("db").(*gorm.DB)
+	repo := NewTodoRepositoryImpl(db)
 	service := NewTodoService(repo)
 
 	// Parse the ID from the URL parameter.
@@ -49,7 +51,8 @@ func UpdateTodo(c *fiber.Ctx) error {
 }
 
 func UpdateTodoDone(c *fiber.Ctx) error {
-	repo := &TodoRepositoryImpl{}
+	db := c.Locals("db").(*gorm.DB)
+	repo := NewTodoRepositoryImpl(db)
 	service := NewTodoService(repo)
 
 	// Parse the ID from the URL parameter.
@@ -76,6 +79,7 @@ func UpdateTodoDone(c *fiber.Ctx) error {
 }
 
 func GetAllTodos(c *fiber.Ctx) error {
+	db := c.Locals("db").(*gorm.DB)
 	repo := NewTodoRepositoryImpl(db)
 	service := NewTodoService(repo)
 	todos, err := service.GetAllTodos()
@@ -86,7 +90,8 @@ func GetAllTodos(c *fiber.Ctx) error {
 }
 
 func GetTodoById(c *fiber.Ctx) error {
-	repo := &TodoRepositoryImpl{}
+	db := c.Locals("db").(*gorm.DB)
+	repo := NewTodoRepositoryImpl(db)
 	service := NewTodoService(repo)
 
 	// Parse the ID from the URL parameter.
@@ -103,7 +108,8 @@ func GetTodoById(c *fiber.Ctx) error {
 }
 
 func DeleteTodoById(c *fiber.Ctx) error {
-	repo := &TodoRepositoryImpl{}
+	db := c.Locals("db").(*gorm.DB)
+	repo := NewTodoRepositoryImpl(db)
 	service := NewTodoService(repo)
 
 	// Parse the ID from the URL parameter.
