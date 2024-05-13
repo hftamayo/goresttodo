@@ -7,7 +7,6 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/gofiber/fiber/v2"
 	"github.com/hftamayo/gotodo/api/v1/models"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/postgres"
@@ -16,7 +15,7 @@ import (
 
 var db *gorm.DB
 
-func DataLayerConnect(app *fiber.App, db *gorm.DB) (*gorm.DB, error) {
+func DataLayerConnect() (*gorm.DB, error) {
 	if !isTestEnviro() {
 		if err := godotenv.Load(); err != nil {
 			fmt.Println("Error reading context data")
