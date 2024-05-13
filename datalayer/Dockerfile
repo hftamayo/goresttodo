@@ -14,4 +14,5 @@ EXPOSE 5432
 CMD ["docker-entrypoint.sh", "postgres"]
 
 #to run this file:
+#docker build -t your-image-name .
 #docker run --env-file .env your-image-name
