@@ -20,11 +20,11 @@ func DataLayerConnect() (*gorm.DB, error) {
 		if err := godotenv.Load(); err != nil {
 			fmt.Println("Error reading context data")
 		}
-		host := os.Getenv("DATABASE_HOST")
-		portStr := os.Getenv("DATABASE_PORT")
-		user := os.Getenv("DATABASE_USER")
-		password := os.Getenv("DATABASE_PASSWORD")
-		databaseName := os.Getenv("DATABASE_NAME")
+		host := os.Getenv("POSTGRES_HOST")
+		portStr := os.Getenv("POSTGRES_PORT")
+		user := os.Getenv("POSTGRES_USER")
+		password := os.Getenv("POSTGRES_PASSWORD")
+		databaseName := os.Getenv("POSTGRES_DB")
 		port, err := strconv.Atoi(portStr)
 		if err != nil {
 			log.Printf("Error converting port to integer.\n%v", err)
