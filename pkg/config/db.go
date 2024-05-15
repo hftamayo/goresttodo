@@ -52,8 +52,11 @@ func isTestEnviro() bool {
 	case "testing":
 		fmt.Println("running in testing mode")
 		return true
-	default:
+	case "production":
 		fmt.Println("running in production mode")
+		return true
+	default:
+		fmt.Println("no run mode specified")
 		return false
 	}
 }
