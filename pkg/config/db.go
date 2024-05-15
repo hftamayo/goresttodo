@@ -17,7 +17,7 @@ var db *gorm.DB
 
 func DataLayerConnect() (*gorm.DB, error) {
 	if !isTestEnviro() {
-		if err := godotenv.Load(); err != nil {
+		if err := godotenv.Load("../../.env"); err != nil {
 			fmt.Println("Error reading context data")
 		}
 		host := os.Getenv("POSTGRES_HOST")
