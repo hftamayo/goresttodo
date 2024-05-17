@@ -16,6 +16,10 @@ import (
 var db *gorm.DB
 
 func DataLayerConnect() (*gorm.DB, error) {
+	if err := godotenv.Load(); err != nil {
+		fmt.Println("Error reading context data")
+	}
+
 	if !isTestEnviro() {
 		if err := godotenv.Load(); err != nil {
 			fmt.Println("Error reading context data")
