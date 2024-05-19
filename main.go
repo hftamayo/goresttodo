@@ -13,7 +13,16 @@ func main() {
 	var err error
 
 	app := fiber.New()
-	db, err := config.DataLayerConnect()
+	envVars, err := config.LoadEnvVars()
+	if err != nil {
+		log.Fatalf("Error loading environment variables: %v", err)
+	}
+
+	if !config.CheckDataLayerAvailability(envVars) {
+		log.Fatalf("Error: Data layer is not available: %v", err)
+	}
+
+	db, err := config.DataLayerConnect(envVars)
 	if err != nil {
 		log.Fatalf("Failed to connect to the database: %v", err)
 	}
