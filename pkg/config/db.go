@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/hftamayo/gotodo/api/v1/models"
 	"github.com/jinzhu/gorm"
@@ -14,6 +15,14 @@ import (
 )
 
 var db *gorm.DB
+
+func loadEnvVars() error {
+	if err := godotenv.Load(); err != nil {
+		fmt.Println("Error reading context data")
+		return err
+	}
+	return nil
+}
 
 func DataLayerConnect() (*gorm.DB, error) {
 	if err := godotenv.Load(); err != nil {
@@ -45,6 +54,20 @@ func DataLayerConnect() (*gorm.DB, error) {
 	} else {
 		return nil, errors.New("running in testing mode")
 	}
+}
+
+func checkDataLayerAvailability() bool {
+	var err error
+
+	for i := 0; i < 3; i++ {
+		db, err = gorm.Open("postgres", "host=localhost port=5432 user=postgres dbname=gotodo sslmode=disable")
+		if err != nil {
+			log.Printf("Error connecting to the database.\n%v", err)
+			return true
+		}
+		time.Sleep(3 * time.Second)
+	}
+	return false
 }
 
 func isTestEnviro() bool {
