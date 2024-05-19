@@ -24,26 +24,31 @@ func loadEnvVars() error {
 	return nil
 }
 
+func buildConnectionString() (string, error) {
+	host := os.Getenv("POSTGRES_HOST")
+	portStr := os.Getenv("POSTGRES_PORT")
+	user := os.Getenv("POSTGRES_USER")
+	password := os.Getenv("POSTGRES_PASSWORD")
+	databaseName := os.Getenv("POSTGRES_DB")
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		log.Printf("Error converting port to integer.\n%v", err)
+		return "", err
+	}
+	connectionString := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", host, port, user, password, databaseName)
+	return connectionString, nil
+}
+
 func DataLayerConnect() (*gorm.DB, error) {
-	if err := godotenv.Load(); err != nil {
-		fmt.Println("Error reading context data")
+	if err := loadEnvVars(); err != nil {
+		return nil, err
 	}
 
 	if !isTestEnviro() {
-		if err := godotenv.Load(); err != nil {
-			fmt.Println("Error reading context data")
-		}
-		host := os.Getenv("POSTGRES_HOST")
-		portStr := os.Getenv("POSTGRES_PORT")
-		user := os.Getenv("POSTGRES_USER")
-		password := os.Getenv("POSTGRES_PASSWORD")
-		databaseName := os.Getenv("POSTGRES_DB")
-		port, err := strconv.Atoi(portStr)
+		connectionString, err := buildConnectionString()
 		if err != nil {
-			log.Printf("Error converting port to integer.\n%v", err)
 			return nil, err
 		}
-		connectionString := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", host, port, user, password, databaseName)
 		db, err := gorm.Open("postgres", connectionString)
 		if err != nil {
 			log.Printf("Error connecting to the database.\n%v", err)
@@ -57,15 +62,24 @@ func DataLayerConnect() (*gorm.DB, error) {
 }
 
 func checkDataLayerAvailability() bool {
-	var err error
+	if err := loadEnvVars(); err != nil {
+		return false
+	}
+
+	connectionString, err := buildConnectionString()
+	if err != nil {
+		return false
+	}
 
 	for i := 0; i < 3; i++ {
-		db, err = gorm.Open("postgres", "host=localhost port=5432 user=postgres dbname=gotodo sslmode=disable")
+		db, err = gorm.Open("postgres", connectionString)
 		if err != nil {
 			log.Printf("Error connecting to the database.\n%v", err)
-			return true
+			time.Sleep(3 * time.Second)
+			continue
 		}
-		time.Sleep(3 * time.Second)
+		db.Close()
+		return true
 	}
 	return false
 }
