@@ -71,20 +71,29 @@ func LoadEnvVars() (*EnvVars, error) {
 }
 
 func CheckDataLayerAvailability(envVars *EnvVars) bool {
-
 	connectionString := buildConnectionString(envVars)
-	var err error
 
 	for i := 0; i < 3; i++ {
-		db, err = gorm.Open("postgres", connectionString) // Assign the value to the existing err variable
+		start := time.Now() // Start the timer
+
+		db, err := gorm.Open("postgres", connectionString)
 		if err != nil {
-			log.Printf("Error connecting to the database.\n%v", err)
+			elapsed := time.Since(start) // Calculate elapsed time
+
+			if i == 0 {
+				log.Printf("First connection attempt unsuccessful.\n%v", err)
+			} else {
+				log.Printf("Connection attempt %d unsuccessful. Elapsed time: %v\n%v", i+1, elapsed, err)
+			}
+
 			time.Sleep(3 * time.Second)
 			continue
 		}
+
 		db.Close()
 		return true
 	}
+
 	return false
 }
 
