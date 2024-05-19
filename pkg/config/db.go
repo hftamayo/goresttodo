@@ -18,19 +18,34 @@ var db *gorm.DB
 
 type EnvVars struct {
 	Host     string
-	Port     string
+	Port     int
 	User     string
 	Password string
 	Dbname   string
 	Mode     string
 }
 
-func loadEnvVars() error {
+func loadEnvVars() (*EnvVars, error) {
 	if err := godotenv.Load(); err != nil {
 		fmt.Println("Error reading context data")
-		return err
+		return nil, err
 	}
-	return nil
+	portStr := os.Getenv("POSTGRES_PORT")
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		log.Printf("Error converting port to integer.\n%v", err)
+		return nil, err
+	}
+
+	envVars := &EnvVars{
+		Host:     os.Getenv("POSTGRES_HOST"),
+		Port:     port,
+		User:     os.Getenv("POSTGRES_USER"),
+		Password: os.Getenv("POSTGRES_PASSWORD"),
+		Dbname:   os.Getenv("POSTGRES_DB"),
+		Mode:     os.Getenv("GOAPP_MODE"),
+	}
+	return envVars, nil
 }
 
 func buildConnectionString() (string, error) {
