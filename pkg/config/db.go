@@ -48,31 +48,15 @@ func loadEnvVars() (*EnvVars, error) {
 	return envVars, nil
 }
 
-func buildConnectionString() (string, error) {
-	host := os.Getenv("POSTGRES_HOST")
-	portStr := os.Getenv("POSTGRES_PORT")
-	user := os.Getenv("POSTGRES_USER")
-	password := os.Getenv("POSTGRES_PASSWORD")
-	databaseName := os.Getenv("POSTGRES_DB")
-	port, err := strconv.Atoi(portStr)
-	if err != nil {
-		log.Printf("Error converting port to integer.\n%v", err)
-		return "", err
-	}
-	connectionString := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", host, port, user, password, databaseName)
-	return connectionString, nil
+func buildConnectionString(envVars *EnvVars) string {
+	connectionString := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", envVars.Host, envVars.Port, envVars.User, envVars.Password, envVars.Dbname)
+	return connectionString
 }
 
-func DataLayerConnect() (*gorm.DB, error) {
-	if err := loadEnvVars(); err != nil {
-		return nil, err
-	}
+func dataLayerConnect(envVars *EnvVars) (*gorm.DB, error) {
 
-	if !isTestEnviro() {
-		connectionString, err := buildConnectionString()
-		if err != nil {
-			return nil, err
-		}
+	if !isTestEnviro(envVars) {
+		connectionString := buildConnectionString(envVars) // Assign the returned value to the connectionString variable
 		db, err := gorm.Open("postgres", connectionString)
 		if err != nil {
 			log.Printf("Error connecting to the database.\n%v", err)
@@ -85,18 +69,13 @@ func DataLayerConnect() (*gorm.DB, error) {
 	}
 }
 
-func checkDataLayerAvailability() bool {
-	if err := loadEnvVars(); err != nil {
-		return false
-	}
+func checkDataLayerAvailability(envVars *EnvVars) bool {
 
-	connectionString, err := buildConnectionString()
-	if err != nil {
-		return false
-	}
+	connectionString := buildConnectionString(envVars)
+	var err error
 
 	for i := 0; i < 3; i++ {
-		db, err = gorm.Open("postgres", connectionString)
+		db, err = gorm.Open("postgres", connectionString) // Assign the value to the existing err variable
 		if err != nil {
 			log.Printf("Error connecting to the database.\n%v", err)
 			time.Sleep(3 * time.Second)
@@ -108,9 +87,8 @@ func checkDataLayerAvailability() bool {
 	return false
 }
 
-func isTestEnviro() bool {
-	envMode := os.Getenv("GOAPP_MODE")
-	switch envMode {
+func isTestEnviro(envVars *EnvVars) bool {
+	switch envVars.Mode {
 	case "development":
 		fmt.Println("running in development mode")
 		return false
