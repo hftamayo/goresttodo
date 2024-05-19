@@ -16,6 +16,15 @@ import (
 
 var db *gorm.DB
 
+type EnvVars struct {
+	Host     string
+	Port     string
+	User     string
+	Password string
+	Dbname   string
+	Mode     string
+}
+
 func loadEnvVars() error {
 	if err := godotenv.Load(); err != nil {
 		fmt.Println("Error reading context data")
