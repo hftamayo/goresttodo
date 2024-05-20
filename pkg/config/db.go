@@ -24,6 +24,8 @@ type EnvVars struct {
 	Dbname   string
 	Mode     string
 	timeOut  int
+	seedDev  bool
+	seedProd bool
 }
 
 func buildConnectionString(envVars *EnvVars) string {
@@ -109,9 +111,16 @@ func DataLayerConnect(envVars *EnvVars) (*gorm.DB, error) {
 			log.Printf("Error connecting to the database.\n%v", err)
 			return nil, err
 		}
-		db.AutoMigrate(&models.User{}, &models.Todo{})
-		return db, nil
+		if envVars.seedDev {
+			db.AutoMigrate(&models.User{}, &models.Todo{})
+			return db, nil
+		}
+		if envVars.seedProd {
+			db.AutoMigrate(&models.User{}, &models.Todo{})
+			return db, nil
+		}
+		return nil, errors.New("errors during data seeding, system halted")
 	} else {
-		return nil, errors.New("running in testing mode")
+		return nil, errors.New("no running mode specified, system halted")
 	}
 }
