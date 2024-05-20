@@ -113,10 +113,12 @@ func DataLayerConnect(envVars *EnvVars) (*gorm.DB, error) {
 		}
 		if envVars.seedDev {
 			db.AutoMigrate(&models.User{}, &models.Todo{})
+			fmt.Println("Database seeded on development mode")
 			return db, nil
 		}
 		if envVars.seedProd {
 			db.AutoMigrate(&models.User{}, &models.Todo{})
+			fmt.Println("Database seeded on production mode")
 			return db, nil
 		}
 		return nil, errors.New("errors during data seeding, system halted")
