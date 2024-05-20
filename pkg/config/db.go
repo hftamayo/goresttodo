@@ -23,10 +23,12 @@ type EnvVars struct {
 	Password string
 	Dbname   string
 	Mode     string
+	timeOut  int
 }
 
 func buildConnectionString(envVars *EnvVars) string {
-	connectionString := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", envVars.Host, envVars.Port, envVars.User, envVars.Password, envVars.Dbname)
+	connectionString := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable connect_timeout=%d",
+		envVars.Host, envVars.Port, envVars.User, envVars.Password, envVars.Dbname, envVars.timeOut)
 	return connectionString
 }
 
@@ -66,6 +68,7 @@ func LoadEnvVars() (*EnvVars, error) {
 		Password: os.Getenv("POSTGRES_PASSWORD"),
 		Dbname:   os.Getenv("POSTGRES_DB"),
 		Mode:     os.Getenv("GOAPP_MODE"),
+		timeOut:  30,
 	}
 	return envVars, nil
 }
@@ -86,7 +89,7 @@ func CheckDataLayerAvailability(envVars *EnvVars) bool {
 				log.Printf("Connection attempt %d unsuccessful. Elapsed time: %v\n%v", i+1, elapsed, err)
 			}
 
-			time.Sleep(3 * time.Second)
+			time.Sleep(30 * time.Second)
 			continue
 		}
 
