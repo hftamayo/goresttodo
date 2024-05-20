@@ -109,7 +109,7 @@ func DataLayerConnect(envVars *EnvVars) (*gorm.DB, error) {
 			log.Printf("Error connecting to the database.\n%v", err)
 			return nil, err
 		}
-		db.AutoMigrate(&models.User{})
+		db.AutoMigrate(&models.User{}, &models.Todo{})
 		return db, nil
 	} else {
 		return nil, errors.New("running in testing mode")
