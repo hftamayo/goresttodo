@@ -19,7 +19,7 @@ func (s *TodoService) CreateTodo(todo *models.Todo) error {
 }
 
 func (s *TodoService) UpdateTodo(todo *models.Todo) error {
-	existingTodo, err := s.repo.GetById(todo.Id)
+	existingTodo, err := s.repo.GetById(int(todo.ID))
 	if err != nil {
 		return err
 	}
