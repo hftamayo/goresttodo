@@ -63,6 +63,12 @@ func LoadEnvVars() (*EnvVars, error) {
 		return nil, err
 	}
 
+	seedDevStr := os.Getenv("SEED_DEVELOPMENT")
+	seedDev, _ := strconv.ParseBool(seedDevStr)
+
+	seedProdStr := os.Getenv("SEED_PRODUCTION")
+	seedProd, _ := strconv.ParseBool(seedProdStr)
+
 	envVars := &EnvVars{
 		Host:     os.Getenv("POSTGRES_HOST"),
 		Port:     port,
@@ -71,6 +77,8 @@ func LoadEnvVars() (*EnvVars, error) {
 		Dbname:   os.Getenv("POSTGRES_DB"),
 		Mode:     os.Getenv("GOAPP_MODE"),
 		timeOut:  30,
+		seedDev:  seedDev,
+		seedProd: seedProd,
 	}
 	return envVars, nil
 }
@@ -103,25 +111,27 @@ func CheckDataLayerAvailability(envVars *EnvVars) bool {
 }
 
 func DataLayerConnect(envVars *EnvVars) (*gorm.DB, error) {
-
 	if !isTestEnviro(envVars) {
-		connectionString := buildConnectionString(envVars) // Assign the returned value to the connectionString variable
+		connectionString := buildConnectionString(envVars)  // Assign the returned value to the connectionString variable
+		fmt.Println("Connection string:", connectionString) // Print the connection string
+
 		db, err := gorm.Open("postgres", connectionString)
 		if err != nil {
 			log.Printf("Error connecting to the database.\n%v", err)
 			return nil, err
 		}
-		if envVars.seedDev {
-			db.AutoMigrate(&models.User{}, &models.Todo{})
-			fmt.Println("Database seeded on development mode")
+
+		if envVars.seedDev || envVars.seedProd {
+			db = db.AutoMigrate(&models.User{}, &models.Todo{})
+			if db.Error != nil {
+				log.Printf("Error during data seeding.\n%v", err)
+				return nil, db.Error
+			}
 			return db, nil
 		}
-		if envVars.seedProd {
-			db.AutoMigrate(&models.User{}, &models.Todo{})
-			fmt.Println("Database seeded on production mode")
-			return db, nil
-		}
-		return nil, errors.New("errors during data seeding, system halted")
+
+		// Add this return statement
+		return nil, errors.New("no seed mode specified, system halted")
 	} else {
 		return nil, errors.New("no running mode specified, system halted")
 	}
