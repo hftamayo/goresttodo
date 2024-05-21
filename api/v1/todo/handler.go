@@ -40,7 +40,7 @@ func UpdateTodo(c *fiber.Ctx) error {
 	}
 
 	// Set the ID of the todo to the ID from the URL parameter.
-	todo.Id = id
+	todo.ID = uint(id)
 
 	err = service.UpdateTodo(todo)
 	if err != nil {
@@ -68,9 +68,9 @@ func UpdateTodoDone(c *fiber.Ctx) error {
 	}
 
 	// Set the ID of the todo to the ID from the URL parameter.
-	todo.Id = id
+	todo.ID = uint(id)
 
-	err = service.MarkTodoAsDone(todo.Id) // Pass the ID of the todo instead of the todo itself.
+	err = service.MarkTodoAsDone(int(todo.ID)) // Pass the ID of the todo instead of the todo itself.
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update task", "details": err.Error()})
 	}
