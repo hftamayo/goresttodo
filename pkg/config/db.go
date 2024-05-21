@@ -112,8 +112,7 @@ func CheckDataLayerAvailability(envVars *EnvVars) bool {
 
 func DataLayerConnect(envVars *EnvVars) (*gorm.DB, error) {
 	if !isTestEnviro(envVars) {
-		connectionString := buildConnectionString(envVars)  // Assign the returned value to the connectionString variable
-		fmt.Println("Connection string:", connectionString) // Print the connection string
+		connectionString := buildConnectionString(envVars) // Assign the returned value to the connectionString variable
 
 		db, err := gorm.Open("postgres", connectionString)
 		if err != nil {
@@ -127,6 +126,7 @@ func DataLayerConnect(envVars *EnvVars) (*gorm.DB, error) {
 				log.Printf("Error during data seeding.\n%v", err)
 				return nil, db.Error
 			}
+			log.Println("Data seeding successful")
 			return db, nil
 		}
 
