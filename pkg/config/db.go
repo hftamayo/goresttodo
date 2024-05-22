@@ -83,7 +83,7 @@ func LoadEnvVars() (*EnvVars, error) {
 	return envVars, nil
 }
 
-func CheckDataLayerAvailability(envVars *EnvVars) bool {
+func CheckDataLayerAvailability(envVars *EnvVars) (*gorm.DB, error) {
 	connectionString := buildConnectionString(envVars)
 
 	for i := 0; i < 3; i++ {
@@ -102,12 +102,10 @@ func CheckDataLayerAvailability(envVars *EnvVars) bool {
 			time.Sleep(30 * time.Second)
 			continue
 		}
-
-		db.Close()
-		return true
+		return db, nil
 	}
 
-	return false
+	return nil, errors.New("data layer is not available")
 }
 
 func DataLayerConnect(envVars *EnvVars) (*gorm.DB, error) {
