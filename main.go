@@ -21,9 +21,11 @@ func main() {
 		log.Fatalf("Error loading environment variables: %v", err)
 	} else {
 		fmt.Printf("verify data layer availability...\n")
-		if !config.CheckDataLayerAvailability(envVars) {
+		db, err := config.CheckDataLayerAvailability(envVars)
+		if err != nil {
 			log.Fatalf("Error: Data layer is not available: %v", err)
 		} else {
+			defer db.Close()
 			fmt.Printf("connecting to the database...\n")
 			db, err := config.DataLayerConnect(envVars)
 			if err != nil {
