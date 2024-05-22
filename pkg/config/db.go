@@ -127,11 +127,10 @@ func DataLayerConnect(envVars *EnvVars) (*gorm.DB, error) {
 				return nil, db.Error
 			}
 			log.Println("Data seeding successful")
-			return db, nil
+		} else {
+			log.Println("No data seeding required")
 		}
-
-		// Add this return statement
-		return nil, errors.New("no seed mode specified, system halted")
+		return db, nil
 	} else {
 		return nil, errors.New("no running mode specified, system halted")
 	}
