@@ -6,12 +6,16 @@ import (
 	"github.com/jinzhu/gorm"
 )
 
-func NewTodoRepositoryImpl(db *gorm.DB) *TodoRepositoryImpl {
-	return &TodoRepositoryImpl{db: db}
+type Handler struct {
+	db *gorm.DB
 }
 
-func CreateTodo(c *fiber.Ctx) error {
-	db := c.Locals("db").(*gorm.DB)
+func NewHandler(db *gorm.DB) *Handler {
+	return &Handler{db: db}
+}
+
+func (h *Handler) CreateTodo(c *fiber.Ctx) error {
+	db := h.db
 	repo := NewTodoRepositoryImpl(db)
 	service := NewTodoService(repo)
 	todo := &models.Todo{}
@@ -22,8 +26,8 @@ func CreateTodo(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"message": "task created successfully", "data": todo})
 }
 
-func UpdateTodo(c *fiber.Ctx) error {
-	db := c.Locals("db").(*gorm.DB)
+func (h *Handler) UpdateTodo(c *fiber.Ctx) error {
+	db := h.db
 	repo := NewTodoRepositoryImpl(db)
 	service := NewTodoService(repo)
 
@@ -50,8 +54,8 @@ func UpdateTodo(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Task updated successfully", "data": todo})
 }
 
-func UpdateTodoDone(c *fiber.Ctx) error {
-	db := c.Locals("db").(*gorm.DB)
+func (h *Handler) UpdateTodoDone(c *fiber.Ctx) error {
+	db := h.db
 	repo := NewTodoRepositoryImpl(db)
 	service := NewTodoService(repo)
 
@@ -78,8 +82,8 @@ func UpdateTodoDone(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Task updated successfully", "data": todo})
 }
 
-func GetAllTodos(c *fiber.Ctx) error {
-	db := c.Locals("db").(*gorm.DB)
+func (h *Handler) GetAllTodos(c *fiber.Ctx) error {
+	db := h.db
 	repo := NewTodoRepositoryImpl(db)
 	service := NewTodoService(repo)
 	todos, err := service.GetAllTodos()
@@ -89,8 +93,8 @@ func GetAllTodos(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Tasks fetched successfully", "data": todos})
 }
 
-func GetTodoById(c *fiber.Ctx) error {
-	db := c.Locals("db").(*gorm.DB)
+func (h *Handler) GetTodoById(c *fiber.Ctx) error {
+	db := h.db
 	repo := NewTodoRepositoryImpl(db)
 	service := NewTodoService(repo)
 
@@ -107,8 +111,8 @@ func GetTodoById(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Task fetched successfully", "data": todo})
 }
 
-func DeleteTodoById(c *fiber.Ctx) error {
-	db := c.Locals("db").(*gorm.DB)
+func (h *Handler) DeleteTodoById(c *fiber.Ctx) error {
+	db := h.db
 	repo := NewTodoRepositoryImpl(db)
 	service := NewTodoService(repo)
 
