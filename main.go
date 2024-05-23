@@ -7,8 +7,12 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/hftamayo/gotodo/api/routes"
+	"github.com/hftamayo/gotodo/api/v1/todo"
 	"github.com/hftamayo/gotodo/pkg/config"
+	"github.com/jinzhu/gorm"
 )
+
+var db *gorm.DB
 
 func main() {
 	var err error
@@ -21,11 +25,10 @@ func main() {
 		log.Fatalf("Error loading environment variables: %v", err)
 	} else {
 		fmt.Printf("verify data layer availability...\n")
-		db, err := config.CheckDataLayerAvailability(envVars)
+		_, err := config.CheckDataLayerAvailability(envVars)
 		if err != nil {
 			log.Fatalf("Error: Data layer is not available: %v", err)
 		} else {
-			defer db.Close()
 			fmt.Printf("connecting to the database...\n")
 			db, err := config.DataLayerConnect(envVars)
 			if err != nil {
@@ -38,12 +41,8 @@ func main() {
 					AllowCredentials: true,
 				}))
 
-				app.Use(func(c *fiber.Ctx) error {
-					c.Locals("db", db)
-					return c.Next()
-				})
-
-				routes.SetupRoutes(app, db)
+				handler := todo.NewHandler(db)
+				routes.SetupRoutes(app, handler)
 				fmt.Printf("API is up and running")
 
 				app.Get("/gotodo/healthcheck", func(c *fiber.Ctx) error {
