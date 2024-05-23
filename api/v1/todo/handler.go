@@ -14,6 +14,10 @@ func NewHandler(db *gorm.DB) *Handler {
 	return &Handler{db: db}
 }
 
+func NewTodoRepositoryImpl(db *gorm.DB) *TodoRepositoryImpl {
+	return &TodoRepositoryImpl{db: db}
+}
+
 func (h *Handler) CreateTodo(c *fiber.Ctx) error {
 	db := h.db
 	repo := NewTodoRepositoryImpl(db)
