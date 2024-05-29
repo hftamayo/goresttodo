@@ -31,23 +31,27 @@ func (s *TodoService) UpdateTodo(todo *models.Todo) error {
 	return s.repo.Update(todo)
 }
 
-func (s *TodoService) MarkTodoAsDone(id int, done bool) error {
+func (s *TodoService) MarkTodoAsDone(id int, done bool) (*models.Todo, error) {
 	// Fetch the existing todo from the database.
 	existingTodo, err := s.repo.GetById(id)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// If the todo does not exist, return an error.
 	if existingTodo == nil {
-		return errors.New("Todo not found")
+		return nil, errors.New("Todo not found")
 	}
 
 	// Mark the todo as done.
 	existingTodo.Done = done
 
 	// Save the updated todo in the database.
-	return s.repo.Update(existingTodo)
+	err = s.repo.Update(existingTodo)
+	if err != nil {
+		return nil, err
+	}
+	return existingTodo, nil
 }
 
 func (s *TodoService) GetAllTodos() ([]*models.Todo, error) {
