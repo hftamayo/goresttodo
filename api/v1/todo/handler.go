@@ -73,14 +73,18 @@ func (h *Handler) UpdateTodoDone(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid ID"})
 	}
 
-	// Parse the updated todo from the request body.
-	todo := &models.Todo{}
-	if err := c.BodyParser(todo); err != nil {
+	var body map[string]bool
+	if err := c.BodyParser(&body); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
 	}
-
-	// Set the ID of the todo to the ID from the URL parameter.
-	todo.ID = uint(id)
+	done, ok := body["done"]
+	if !ok {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing 'done' field in request body"})
+	}
+	todo := &models.Todo{
+		Model: gorm.Model{ID: uint(id)},
+		Done:  done,
+	}
 
 	err = service.MarkTodoAsDone(int(todo.ID)) // Pass the ID of the todo instead of the todo itself.
 	if err != nil {
