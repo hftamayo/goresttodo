@@ -31,7 +31,7 @@ func (s *TodoService) UpdateTodo(todo *models.Todo) error {
 	return s.repo.Update(todo)
 }
 
-func (s *TodoService) MarkTodoAsDone(id int) error {
+func (s *TodoService) MarkTodoAsDone(id int, done bool) error {
 	// Fetch the existing todo from the database.
 	existingTodo, err := s.repo.GetById(id)
 	if err != nil {
@@ -44,7 +44,7 @@ func (s *TodoService) MarkTodoAsDone(id int) error {
 	}
 
 	// Mark the todo as done.
-	existingTodo.Done = true
+	existingTodo.Done = done
 
 	// Save the updated todo in the database.
 	return s.repo.Update(existingTodo)

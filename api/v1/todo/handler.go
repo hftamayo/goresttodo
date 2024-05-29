@@ -86,7 +86,7 @@ func (h *Handler) UpdateTodoDone(c *fiber.Ctx) error {
 		Done:  done,
 	}
 
-	err = service.MarkTodoAsDone(int(todo.ID)) // Pass the ID of the todo instead of the todo itself.
+	err = service.MarkTodoAsDone(int(todo.ID), done) // Pass the ID of the todo instead of the todo itself.
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update task", "details": err.Error()})
 	}
