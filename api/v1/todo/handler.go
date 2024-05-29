@@ -23,6 +23,10 @@ func (h *Handler) CreateTodo(c *fiber.Ctx) error {
 	repo := NewTodoRepositoryImpl(db)
 	service := NewTodoService(repo)
 	todo := &models.Todo{}
+
+	if err := c.BodyParser(todo); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
+	}
 	err := service.CreateTodo(todo)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error: failed to create a new task": err.Error()})
