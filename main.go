@@ -27,7 +27,7 @@ func main() {
 		fmt.Printf("verify data layer availability...\n")
 		_, err := config.CheckDataLayerAvailability(envVars)
 		if err != nil {
-			log.Fatalf("Error: Data layer is not available: %v", err)
+			log.Fatalf("Error: Data layer is not available, exiting...: %v", err)
 		} else {
 			fmt.Printf("connecting to the database...\n")
 			db, err := config.DataLayerConnect(envVars)
