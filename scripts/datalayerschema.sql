@@ -9,7 +9,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT FROM pg_roles WHERE rolname = 'goadmin'
     ) THEN
-        CREATE USER goadmin WITH PASSWORD 'your_password';
+        CREATE USER goadmin WITH PASSWORD 'golangtodo';
     END IF;
 
     GRANT ALL PRIVILEGES ON DATABASE golangtodo TO goadmin;

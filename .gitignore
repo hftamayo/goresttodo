@@ -1,2 +1,2 @@
 .env
-datalayer/datalayerschema.sql
+scripts/datalayerschema.sql
