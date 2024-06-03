@@ -18,3 +18,4 @@ CMD ["docker-entrypoint.sh", "postgres"]
 #docker run --env-file .env your-image-name
 #docker build -t hftamayo/pgrestapi:0.0.1 .
 #docker run --name pgrestapi -p 5432:5432 -d --env-file .env hftamayo/pgrestapi:0.0.1
+#docker start pgrestapi
