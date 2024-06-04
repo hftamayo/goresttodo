@@ -1,0 +1,17 @@
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT FROM pg_database WHERE datname = '<name>'
+    ) THEN
+        CREATE DATABASE <name>;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT FROM pg_roles WHERE rolname = '<name>'
+    ) THEN
+        CREATE USER <name> WITH PASSWORD '<name>';
+    END IF;
+
+    GRANT ALL PRIVILEGES ON DATABASE <name> TO <name>;
+END
+$$;
