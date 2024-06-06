@@ -19,7 +19,7 @@ func (m *MockTodoRepository) Create(todo *models.Todo) error {
 
 func TestTodoService_Create(t *testing.T) {
 	repo := new(MockTodoRepository)
-	todo := &Todo{Title: "Test Todo"}
+	todo := &models.Todo{Title: "Test Todo"}
 	repo.On("Create", todo).Return(nil)
 	service := NewTodoService(repo)
 	err := service.Create(todo)
