@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/hftamayo/gotodo/api/v1/models"
+	"github.com/hftamayo/gotodo/api/v1/todo/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -41,8 +42,8 @@ func TestTodoService_Create(t *testing.T) {
 	repo := new(MockTodoRepository)
 	todo := &models.Todo{Title: "Test Todo"}
 	repo.On("Create", todo).Return(nil)
-	service := NewTodoService(repo)
-	err := service.Create(todo)
+	service := service.NewTodoService(repo)
+	err := service.CreateTodo(todo)
 	repo.AssertExpectations(t)
 	assert.NoError(t, err)
 }
