@@ -5,7 +5,7 @@ FROM postgres:14-alpine
 WORKDIR /docker-entrypoint-initdb.d
 
 # Copy the datalayerschema.sql script to the container
-COPY datalayerschema.sql .
+COPY db.sql .
 
 # Expose the PostgreSQL default port
 EXPOSE 5432
