@@ -3,9 +3,10 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
 
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
 	"github.com/hftamayo/gotodo/api/routes"
 	"github.com/hftamayo/gotodo/api/v1/todo"
 	"github.com/hftamayo/gotodo/pkg/config"
@@ -16,9 +17,9 @@ var db *gorm.DB
 
 func main() {
 	var err error
-	fmt.Printf("Starting ToDo RestAPI\n")
+	fmt.Printf("Starting ToDo GraphQLAPI\n")
 
-	app := fiber.New()
+	r := gin.Default()
 	fmt.Printf("reading environment...\n")
 	envVars, err := config.LoadEnvVars()
 	if err != nil {
@@ -35,21 +36,22 @@ func main() {
 				log.Fatalf("Failed to connect to the database: %v", err)
 			} else {
 				fmt.Printf("connected to the database, loading last stage: \n")
-				app.Use(cors.New(cors.Config{
-					AllowOrigins:     "http://localhost:5173",
-					AllowHeaders:     "Origin, Content-Type, Accept",
+				r.Use(cors.New(cors.Config{
+					AllowOrigins:     []string{"http://localhost:5173"},
+					AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"},
+					AllowHeaders:     []string{"Origin, Content-Type, Accept"},
 					AllowCredentials: true,
 				}))
 
 				handler := todo.NewHandler(db)
-				routes.SetupRoutes(app, handler)
+				routes.SetupRoutes(r, handler)
 				fmt.Printf("API is up and running")
 
-				app.Get("/gotodo/healthcheck", func(c *fiber.Ctx) error {
-					return c.SendString("GoToDo RestAPI is up and running")
+				r.GET("/gotodo/healthcheck", func(c *gin.Context) {
+					c.String(http.StatusOK, "GoToDo RestAPI is up and running")
 				})
 
-				log.Fatal(app.Listen(":8001"))
+				log.Fatal(r.Run(":8001"))
 
 			}
 		}
