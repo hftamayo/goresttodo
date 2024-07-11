@@ -1,7 +1,10 @@
 package todo
 
 import (
-	"github.com/gofiber/fiber/v2"
+	"net/http"
+	"strconv"
+
+	"github.com/gin-gonic/gin"
 	"github.com/hftamayo/gotodo/api/v1/models"
 	"github.com/jinzhu/gorm"
 )
@@ -18,37 +21,41 @@ func NewTodoRepositoryImpl(db *gorm.DB) *TodoRepositoryImpl {
 	return &TodoRepositoryImpl{db: db}
 }
 
-func (h *Handler) CreateTodo(c *fiber.Ctx) error {
+func (h *Handler) CreateTodo(c *gin.Context) {
 	db := h.db
 	repo := NewTodoRepositoryImpl(db)
 	service := NewTodoService(repo)
 	todo := &models.Todo{}
 
-	if err := c.BodyParser(todo); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
+	if err := c.ShouldBindJSON(todo); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot parse JSON"})
+		return
 	}
 	err := service.CreateTodo(todo)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error: failed to create a new task": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create a new task", "details": err.Error()})
+		return
 	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"message": "task created successfully", "data": todo})
+	c.JSON(http.StatusCreated, gin.H{"message": "task created successfully", "data": todo})
 }
 
-func (h *Handler) UpdateTodo(c *fiber.Ctx) error {
+func (h *Handler) UpdateTodo(c *gin.Context) {
 	db := h.db
 	repo := NewTodoRepositoryImpl(db)
 	service := NewTodoService(repo)
 
 	// Parse the ID from the URL parameter.
-	id, err := c.ParamsInt("id")
+	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid ID"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		return
 	}
 
 	// Parse the updated todo from the request body.
 	todo := &models.Todo{}
-	if err := c.BodyParser(todo); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
+	if err := c.ShouldBindJSON(todo); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot parse JSON"})
+		return
 	}
 
 	// Set the ID of the todo to the ID from the URL parameter.
@@ -56,30 +63,33 @@ func (h *Handler) UpdateTodo(c *fiber.Ctx) error {
 
 	err = service.UpdateTodo(todo)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update task", "details": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update task", "details": err.Error()})
+		return
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Task updated successfully", "data": todo})
+	c.JSON(http.StatusOK, gin.H{"message": "Task updated successfully", "data": todo})
 }
 
-func (h *Handler) UpdateTodoDone(c *fiber.Ctx) error {
+func (h *Handler) UpdateTodoDone(c *gin.Context) {
 	db := h.db
 	repo := NewTodoRepositoryImpl(db)
 	service := NewTodoService(repo)
 
 	// Parse the ID from the URL parameter.
-	id, err := c.ParamsInt("id")
+	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid ID"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		return
 	}
 
 	var body map[string]bool
-	if err := c.BodyParser(&body); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot parse JSON"})
+		return
 	}
 	done, ok := body["done"]
 	if !ok {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing 'done' field in request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing 'done' field in request body"})
 	}
 	todo := &models.Todo{
 		Model: gorm.Model{ID: uint(id)},
@@ -88,55 +98,61 @@ func (h *Handler) UpdateTodoDone(c *fiber.Ctx) error {
 
 	todo, err = service.MarkTodoAsDone(int(todo.ID), done) // Pass the ID of the todo instead of the todo itself.
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update task", "details": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update task", "details": err.Error()})
+		return
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Task updated successfully", "data": todo})
+	c.JSON(http.StatusOK, gin.H{"message": "Task updated successfully", "data": todo})
 }
 
-func (h *Handler) GetAllTodos(c *fiber.Ctx) error {
+func (h *Handler) GetAllTodos(c *gin.Context) {
 	db := h.db
 	repo := NewTodoRepositoryImpl(db)
 	service := NewTodoService(repo)
 	todos, err := service.GetAllTodos()
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch tasks", "details": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to fetch tasks", " details": err.Error()})
+		return
 	}
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Tasks fetched successfully", "data": todos})
+	c.JSON(http.StatusOK, gin.H{"message": "Tasks fetched successfully", "data": todos})
 }
 
-func (h *Handler) GetTodoById(c *fiber.Ctx) error {
+func (h *Handler) GetTodoById(c *gin.Context) {
 	db := h.db
 	repo := NewTodoRepositoryImpl(db)
 	service := NewTodoService(repo)
 
 	// Parse the ID from the URL parameter.
-	id, err := c.ParamsInt("id")
+	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid ID"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		return
 	}
 
 	todo, err := service.GetTodoById(id)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch task", "details": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch task", "details": err.Error()})
+		return
 	}
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Task fetched successfully", "data": todo})
+	c.JSON(http.StatusOK, gin.H{"message": "Task fetched successfully", "data": todo})
 }
 
-func (h *Handler) DeleteTodoById(c *fiber.Ctx) error {
+func (h *Handler) DeleteTodoById(c *gin.Context) {
 	db := h.db
 	repo := NewTodoRepositoryImpl(db)
 	service := NewTodoService(repo)
 
 	// Parse the ID from the URL parameter.
-	id, err := c.ParamsInt("id")
+	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid ID"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		return
 	}
 
 	err = service.DeleteTodoById(id)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete task", "details": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete task", "details": err.Error()})
+		return
 	}
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Task deleted successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": "Task deleted successfully"})
 }

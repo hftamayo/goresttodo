@@ -1,23 +1,23 @@
 package routes
 
 import (
-	"github.com/gofiber/fiber/v2"
+	"github.com/gin-gonic/gin"
 	"github.com/hftamayo/gotodo/api/v1/todo"
 )
 
-func SetupRoutes(app *fiber.App, handler *todo.Handler) {
+func SetupRoutes(app *gin.Engine, handler *todo.Handler) {
 	const todoIDPath = "/gotodo/todo/:id"
 
-	app.Post("/gotodo/todo", handler.CreateTodo)
+	app.POST("/gotodo/todo", handler.CreateTodo)
 
-	app.Patch(todoIDPath+"/done", handler.UpdateTodoDone)
+	app.PATCH(todoIDPath+"/done", handler.UpdateTodoDone)
 
-	app.Patch(todoIDPath, handler.UpdateTodo)
+	app.PATCH(todoIDPath, handler.UpdateTodo)
 
-	app.Get("/gotodo/todos", handler.GetAllTodos)
+	app.GET("/gotodo/todos", handler.GetAllTodos)
 
-	app.Get(todoIDPath, handler.GetTodoById)
+	app.GET(todoIDPath, handler.GetTodoById)
 
-	app.Delete(todoIDPath, handler.DeleteTodoById)
+	app.DELETE(todoIDPath, handler.DeleteTodoById)
 
 }
