@@ -1,7 +1,11 @@
 ## Version History ##
 
+### 0.0.3 ###
+- Gin as Web Framework
+- Gorm as ORM Framework
+
 ### 0.0.2 ###
-- Fiber as ORM framework
+- Fiber as Web framework
 - Postgres as datalayer
 - Improving function such as: data seeding and clean architecture
 
