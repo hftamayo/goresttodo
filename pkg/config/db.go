@@ -90,7 +90,6 @@ func CheckDataLayerAvailability(envVars *EnvVars) (*gorm.DB, error) {
 	for i := 0; i < 3; i++ {
 		start := time.Now() // Start the timer
 
-		db, err := gorm.Open("postgres", connectionString)
 		db, err := gorm.Open(postgres.Open(connectionString), &gorm.Config{})
 		if err != nil {
 			elapsed := time.Since(start) // Calculate elapsed time
