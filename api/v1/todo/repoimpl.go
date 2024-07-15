@@ -4,7 +4,7 @@ import (
 	"errors"
 
 	"github.com/hftamayo/gotodo/api/v1/models"
-	"github.com/jinzhu/gorm"
+	"gorm.io/gorm"
 )
 
 type TodoRepositoryImpl struct {

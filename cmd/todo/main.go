@@ -10,7 +10,7 @@ import (
 	"github.com/hftamayo/gotodo/api/routes"
 	"github.com/hftamayo/gotodo/api/v1/todo"
 	"github.com/hftamayo/gotodo/pkg/config"
-	"github.com/jinzhu/gorm"
+	"gorm.io/gorm"
 )
 
 var db *gorm.DB
