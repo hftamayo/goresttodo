@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/hftamayo/gotodo/api/v1/models"
-	"github.com/jinzhu/gorm"
-	_ "github.com/jinzhu/gorm/dialects/postgres"
 	"github.com/joho/godotenv"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 var db *gorm.DB
@@ -89,7 +89,7 @@ func CheckDataLayerAvailability(envVars *EnvVars) (*gorm.DB, error) {
 	for i := 0; i < 3; i++ {
 		start := time.Now() // Start the timer
 
-		db, err := gorm.Open("postgres", connectionString)
+		db, err := gorm.Open(postgres.Open(connectionString), &gorm.Config{})
 		if err != nil {
 			elapsed := time.Since(start) // Calculate elapsed time
 
@@ -112,14 +112,16 @@ func DataLayerConnect(envVars *EnvVars) (*gorm.DB, error) {
 	if !isTestEnviro(envVars) {
 		connectionString := buildConnectionString(envVars) // Assign the returned value to the connectionString variable
 
-		db, err := gorm.Open("postgres", connectionString)
+		db, err := gorm.Open(postgres.Open(connectionString), &gorm.Config{})
 		if err != nil {
 			log.Printf("Error connecting to the database.\n%v", err)
 			return nil, err
 		}
 
 		if envVars.seedDev || envVars.seedProd {
-			db = db.AutoMigrate(&models.User{}, &models.Todo{})
+			log.Println("Data seeding required")
+
+			err := db.AutoMigrate(&models.User{}, &models.Todo{})
 			if db.Error != nil {
 				log.Printf("Error during data seeding.\n%v", err)
 				return nil, db.Error
