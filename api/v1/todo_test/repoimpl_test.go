@@ -12,6 +12,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
+	"github.com/hftamayo/gotodo/api/v1/models"
 	repoimpl "github.com/hftamayo/gotodo/api/v1/todo"
 )
 
@@ -160,7 +161,7 @@ func TestCreate(t *testing.T) {
 	mock.ExpectCommit()
 
 	// Call the method
-	err = repo.Create(&repoimpl.Todo{Title: "Test Todo"})
+	err = repo.Create(&models.Todo{Title: "Test Todo"})
 
 	// Assertions
 	assert.NoError(t, err)
@@ -179,7 +180,7 @@ func TestCreateError(t *testing.T) {
 	mock.ExpectRollback()
 
 	// Call the method
-	err = repo.Create(&repoimpl.Todo{Title: "Test Todo"})
+	err = repo.Create(&models.Todo{Title: "Test Todo"})
 
 	// Assertions
 	assert.Error(t, err)
@@ -198,7 +199,7 @@ func TestUpdate(t *testing.T) {
 	mock.ExpectCommit()
 
 	// Call the method
-	err = repo.Update(&repoimpl.Todo{ID: 1, Title: "Test Todo"})
+	err = repo.Update(&models.Todo{ID: 1, Title: "Test Todo"})
 
 	// Assertions
 	assert.NoError(t, err)
@@ -217,7 +218,7 @@ func TestUpdateError(t *testing.T) {
 	mock.ExpectRollback()
 
 	// Call the method
-	err = repo.Update(&repoimpl.Todo{ID: 1, Title: "Test Todo"})
+	err = repo.Update(&models.Todo{ID: 1, Title: "Test Todo"})
 
 	// Assertions
 	assert.Error(t, err)
