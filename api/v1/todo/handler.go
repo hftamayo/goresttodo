@@ -10,19 +10,19 @@ import (
 )
 
 type Handler struct {
-	db *gorm.DB
+	Db *gorm.DB
 }
 
 func NewHandler(db *gorm.DB) *Handler {
-	return &Handler{db: db}
+	return &Handler{Db: db}
 }
 
 func NewTodoRepositoryImpl(db *gorm.DB) *TodoRepositoryImpl {
-	return &TodoRepositoryImpl{db: db}
+	return &TodoRepositoryImpl{Db: db}
 }
 
 func (h *Handler) CreateTodo(c *gin.Context) {
-	db := h.db
+	db := h.Db
 	repo := NewTodoRepositoryImpl(db)
 	service := NewTodoService(repo)
 	todo := &models.Todo{}
@@ -40,7 +40,7 @@ func (h *Handler) CreateTodo(c *gin.Context) {
 }
 
 func (h *Handler) UpdateTodo(c *gin.Context) {
-	db := h.db
+	db := h.Db
 	repo := NewTodoRepositoryImpl(db)
 	service := NewTodoService(repo)
 
@@ -71,7 +71,7 @@ func (h *Handler) UpdateTodo(c *gin.Context) {
 }
 
 func (h *Handler) UpdateTodoDone(c *gin.Context) {
-	db := h.db
+	db := h.Db
 	repo := NewTodoRepositoryImpl(db)
 	service := NewTodoService(repo)
 
@@ -106,7 +106,7 @@ func (h *Handler) UpdateTodoDone(c *gin.Context) {
 }
 
 func (h *Handler) GetAllTodos(c *gin.Context) {
-	db := h.db
+	db := h.Db
 	repo := NewTodoRepositoryImpl(db)
 	service := NewTodoService(repo)
 	todos, err := service.GetAllTodos()
@@ -118,7 +118,7 @@ func (h *Handler) GetAllTodos(c *gin.Context) {
 }
 
 func (h *Handler) GetTodoById(c *gin.Context) {
-	db := h.db
+	db := h.Db
 	repo := NewTodoRepositoryImpl(db)
 	service := NewTodoService(repo)
 
@@ -138,7 +138,7 @@ func (h *Handler) GetTodoById(c *gin.Context) {
 }
 
 func (h *Handler) DeleteTodoById(c *gin.Context) {
-	db := h.db
+	db := h.Db
 	repo := NewTodoRepositoryImpl(db)
 	service := NewTodoService(repo)
 
