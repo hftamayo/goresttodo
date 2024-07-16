@@ -1,26 +1,42 @@
-package todo
+package todotest
 
 import (
 	"errors"
+	"fmt"
+	"os"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/joho/godotenv"
 	"github.com/stretchr/testify/assert"
-	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	"yourapp/repoimpl and model"
+	repoimpl "github.com/hftamayo/gotodo/api/v1/todo"
 )
 
 func setupDBMock() (*gorm.DB, sqlmock.Sqlmock, error) {
+	err := godotenv.Load()
+	if err != nil {
+		return nil, nil, fmt.Errorf("Error reading context data: %w", err)
+	}
+
 	db, mock, err := sqlmock.New() // Create instance of SQL mock.
 	if err != nil {
 		return nil, nil, err
 	}
 
-	gormDB, err := gorm.Open(mysql.New(mysql.Config{
-		Conn:                      db,
-		SkipInitializeWithVersion: true,
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		os.Getenv("POSTGRES_HOST"),
+		os.Getenv("POSTGRES_PORT"),
+		os.Getenv("POSTGRES_USER"),
+		os.Getenv("POSTGRES_PASSWORD"),
+		os.Getenv("POSTGRES_DB"))
+
+	gormDB, err := gorm.Open(postgres.New(postgres.Config{
+		DSN:                  dsn,
+		PreferSimpleProtocol: true,
+		Conn:                 db,
 	}), &gorm.Config{})
 	if err != nil {
 		return nil, nil, err
@@ -29,7 +45,7 @@ func setupDBMock() (*gorm.DB, sqlmock.Sqlmock, error) {
 	return gormDB, mock, nil
 }
 
-func TestGetById_Found(t *testing.T) {
+func TestGetById(t *testing.T) {
 	gormDB, mock, err := setupDBMock()
 	assert.NoError(t, err)
 
@@ -51,7 +67,7 @@ func TestGetById_Found(t *testing.T) {
 	assert.Equal(t, "Test Todo", todo.Title)
 }
 
-func TestGetById_NotFound(t *testing.T) {
+func TestGetByIdNotFound(t *testing.T) {
 	gormDB, mock, err := setupDBMock()
 	assert.NoError(t, err)
 
@@ -70,7 +86,7 @@ func TestGetById_NotFound(t *testing.T) {
 	assert.Nil(t, todo)
 }
 
-func TestGetById_Error(t *testing.T) {
+func TestGetByIdError(t *testing.T) {
 	gormDB, mock, err := setupDBMock()
 	assert.NoError(t, err)
 
