@@ -104,3 +104,27 @@ func TestGetByIdError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, todo)
 }
+
+func TestGetAll(t *testing.T) {
+	gormDB, mock, err := setupDBMock()
+	assert.NoError(t, err)
+
+	repo := repoimpl.TodoRepositoryImpl{Db: gormDB}
+
+	// Mocking the SQL query response.
+	rows := sqlmock.NewRows([]string{"id", "title", "completed"}).
+		AddRow(1, "Test Todo 1", false).
+		AddRow(2, "Test Todo 2", true)
+	mock.ExpectQuery("^SELECT \\* FROM `todos`").
+		WillReturnRows(rows)
+
+	// Call the method
+	todos, err := repo.GetAll(1, 10)
+
+	// Assertions
+	assert.NoError(t, err)
+	assert.NotNil(t, todos)
+	assert.Len(t, todos, 2)
+	assert.Equal(t, "Test Todo 1", todos[0].Title)
+	assert.Equal(t, "Test Todo 2", todos[1].Title)
+}
