@@ -146,3 +146,101 @@ func TestGetAllError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, todos)
 }
+
+func TestCreate(t *testing.T) {
+	gormDB, mock, err := setupDBMock()
+	assert.NoError(t, err)
+
+	repo := repoimpl.TodoRepositoryImpl{Db: gormDB}
+
+	// Mocking the SQL query response.
+	mock.ExpectBegin()
+	mock.ExpectExec("^INSERT INTO `todos`").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
+	// Call the method
+	err = repo.Create(&repoimpl.Todo{Title: "Test Todo"})
+
+	// Assertions
+	assert.NoError(t, err)
+}
+
+func TestCreateError(t *testing.T) {
+	gormDB, mock, err := setupDBMock()
+	assert.NoError(t, err)
+
+	repo := repoimpl.TodoRepositoryImpl{Db: gormDB}
+
+	// Mocking the SQL query response for an error.
+	mock.ExpectBegin()
+	mock.ExpectExec("^INSERT INTO `todos`").
+		WillReturnError(errors.New("unexpected error"))
+	mock.ExpectRollback()
+
+	// Call the method
+	err = repo.Create(&repoimpl.Todo{Title: "Test Todo"})
+
+	// Assertions
+	assert.Error(t, err)
+}
+
+func TestUpdate(t *testing.T) {
+	gormDB, mock, err := setupDBMock()
+	assert.NoError(t, err)
+
+	repo := repoimpl.TodoRepositoryImpl{Db: gormDB}
+
+	// Mocking the SQL query response.
+	mock.ExpectBegin()
+	mock.ExpectExec("^UPDATE `todos` SET").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
+	// Call the method
+	err = repo.Update(&repoimpl.Todo{ID: 1, Title: "Test Todo"})
+
+	// Assertions
+	assert.NoError(t, err)
+}
+
+func TestUpdateError(t *testing.T) {
+	gormDB, mock, err := setupDBMock()
+	assert.NoError(t, err)
+
+	repo := repoimpl.TodoRepositoryImpl{Db: gormDB}
+
+	// Mocking the SQL query response for an error.
+	mock.ExpectBegin()
+	mock.ExpectExec("^UPDATE `todos` SET").
+		WillReturnError(errors.New("unexpected error"))
+	mock.ExpectRollback()
+
+	// Call the method
+	err = repo.Update(&repoimpl.Todo{ID: 1, Title: "Test Todo"})
+
+	// Assertions
+	assert.Error(t, err)
+}
+
+func TestDelete(t *testing.T) {
+	gormDB, mock, err := setupDBMock()
+	assert.NoError(t, err)
+
+	repo := repoimpl.TodoRepositoryImpl{Db: gormDB}
+
+	// Mocking the SQL query response.
+	mock.ExpectBegin()
+	mock.ExpectQuery("^SELECT \\* FROM `todos` WHERE `todos`.`id` = \\?").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "title", "completed"}).AddRow(1, "Test Todo", false))
+	mock.ExpectExec("^DELETE FROM `todos` WHERE `todos`.`id` = \\?").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
+	// Call the method
+	err = repo.Delete(1)
+
+	// Assertions
+	assert.NoError(t, err)
+}
