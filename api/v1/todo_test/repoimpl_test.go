@@ -128,3 +128,21 @@ func TestGetAll(t *testing.T) {
 	assert.Equal(t, "Test Todo 1", todos[0].Title)
 	assert.Equal(t, "Test Todo 2", todos[1].Title)
 }
+
+func TestGetAllError(t *testing.T) {
+	gormDB, mock, err := setupDBMock()
+	assert.NoError(t, err)
+
+	repo := repoimpl.TodoRepositoryImpl{Db: gormDB}
+
+	// Mocking the SQL query response for an error.
+	mock.ExpectQuery("^SELECT \\* FROM `todos`").
+		WillReturnError(errors.New("unexpected error"))
+
+	// Call the method
+	todos, err := repo.GetAll(1, 10)
+
+	// Assertions
+	assert.Error(t, err)
+	assert.Nil(t, todos)
+}
