@@ -199,7 +199,12 @@ func TestUpdate(t *testing.T) {
 	mock.ExpectCommit()
 
 	// Call the method
-	err = repo.Update(&models.Todo{ID: 1, Title: "Test Todo"})
+	err = repo.Update(&models.Todo{
+		Model: gorm.Model{ID: 1},
+		Title: "Test Todo",
+		Done:  false,
+		Body:  "Test Body",
+	})
 
 	// Assertions
 	assert.NoError(t, err)
@@ -218,7 +223,8 @@ func TestUpdateError(t *testing.T) {
 	mock.ExpectRollback()
 
 	// Call the method
-	err = repo.Update(&models.Todo{ID: 1, Title: "Test Todo"})
+	err = repo.Update(&models.Todo{
+		Model: gorm.Model{ID: 1}, Title: "Test Todo"})
 
 	// Assertions
 	assert.Error(t, err)
