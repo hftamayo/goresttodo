@@ -10,81 +10,86 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestCreateUser(t *testing.T) {
+// Test Create Todo
+func TestCreateTodo(t *testing.T) {
 	gormDB, mock, err := config.SetupDBMock()
 	assert.NoError(t, err)
 
 	// Mocking the SQL query response
 	mock.ExpectBegin()
-	mock.ExpectExec("^INSERT INTO `users`").
+	mock.ExpectExec("^INSERT INTO `todos`").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 
-	user := &models.User{
-		Name:     "Test User",
-		Email:    "test@example.com",
-		Password: "password",
+	todo := &models.Todo{
+		Title: "Test Todo",
+		Done:  false,
+		Body:  "Test Body",
 	}
 
-	err = gormDB.Create(user).Error
+	err = gormDB.Create(todo).Error
 	assert.NoError(t, err)
-	assert.Equal(t, uint(1), user.ID)
+	assert.Equal(t, uint(1), todo.ID)
 }
 
-func TestGetUserByID(t *testing.T) {
+// Test Read Todo
+func TestGetTodoByID(t *testing.T) {
 	gormDB, mock, err := config.SetupDBMock()
 	assert.NoError(t, err)
 
 	// Mocking the SQL query response
-	rows := sqlmock.NewRows([]string{"id", "name", "email", "password"}).
-		AddRow(1, "Test User", "test@example.com", "password")
-	mock.ExpectQuery("^SELECT (.+) FROM `users` WHERE `users`.`id` = ?").
+	rows := sqlmock.NewRows([]string{"id", "title", "done", "body"}).
+		AddRow(1, "Test Todo", false, "Test Body")
+	mock.ExpectQuery("^SELECT (.+) FROM `todos` WHERE `todos`.`id` = ?").
 		WithArgs(1).
 		WillReturnRows(rows)
 
-	var user models.User
-	err = gormDB.First(&user, 1).Error
+	var todo models.Todo
+	err = gormDB.First(&todo, 1).Error
 	assert.NoError(t, err)
-	assert.Equal(t, "Test User", user.Name)
-	assert.Equal(t, "test@example.com", user.Email)
+	assert.Equal(t, "Test Todo", todo.Title)
+	assert.Equal(t, false, todo.Done)
+	assert.Equal(t, "Test Body", todo.Body)
 }
 
-func TestUpdateUser(t *testing.T) {
+// Test Update Todo
+func TestUpdateTodo(t *testing.T) {
 	gormDB, mock, err := config.SetupDBMock()
 	assert.NoError(t, err)
 
 	// Mocking the SQL query response
 	mock.ExpectBegin()
-	mock.ExpectExec("^UPDATE `users` SET").
+	mock.ExpectExec("^UPDATE `todos` SET").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 
-	user := &models.User{
-		Model:    gorm.Model{ID: 1},
-		Name:     "Updated User",
-		Email:    "updated@example.com",
-		Password: "newpassword",
+	todo := &models.Todo{
+		Model: gorm.Model{ID: 1},
+		Title: "Updated Todo",
+		Done:  true,
+		Body:  "Updated Body",
 	}
 
-	err = gormDB.Save(user).Error
+	err = gormDB.Save(todo).Error
 	assert.NoError(t, err)
 }
 
-func TestDeleteUser(t *testing.T) {
+// Test Delete Todo
+func TestDeleteTodo(t *testing.T) {
 	gormDB, mock, err := config.SetupDBMock()
 	assert.NoError(t, err)
 
 	// Mocking the SQL query response
 	mock.ExpectBegin()
-	mock.ExpectExec("^DELETE FROM `users` WHERE `users`.`id` = ?").
+	mock.ExpectExec("^DELETE FROM `todos` WHERE `todos`.`id` = ?").
 		WithArgs(1).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 
-	user := &models.User{
+	todo := &models.Todo{
 		Model: gorm.Model{ID: 1},
 	}
 
-	err = gormDB.Delete(user).Error
+	err = gormDB.Delete(todo).Error
 	assert.NoError(t, err)
 }
