@@ -7,11 +7,11 @@ BEGIN
     END IF;
 
     IF NOT EXISTS (
-        SELECT FROM pg_roles WHERE rolname = 'goadmin'
+        SELECT FROM pg_roles WHERE rolname = 'sebastic'
     ) THEN
-        CREATE USER goadmin WITH PASSWORD 'golangtodo';
+        CREATE USER sebastic WITH PASSWORD 'milucito';
     END IF;
 
-    GRANT ALL PRIVILEGES ON DATABASE golangtodo TO goadmin;
+    GRANT ALL PRIVILEGES ON DATABASE golangtodo TO sebastic;
 END
 $$;
