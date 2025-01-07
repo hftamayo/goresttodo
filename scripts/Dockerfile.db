@@ -1,21 +1,26 @@
-# Use the official PostgreSQL 14.x image as the base image
 FROM postgres:14-alpine
 
-# Set the working directory inside the container
+RUN apk add --no-cache bash
+
 WORKDIR /docker-entrypoint-initdb.d
 
-# Copy the datalayerschema.sql script to the container
 COPY db.sql .
 
-# Expose the PostgreSQL default port
 EXPOSE 5432
 
-# Run the script during container startup
 CMD ["docker-entrypoint.sh", "postgres"]
-
 #to run this file:
 #docker build -t your-image-name .
 #docker run --env-file .env your-image-name
 #docker build -t hftamayo/pgrestapi:0.0.1 .
 #docker run --name pgrestapi -p 5432:5432 -d --env-file .env hftamayo/pgrestapi:0.0.1
 #docker start pgrestapi
+
+#docker build -f Dockerfile.db -t your-image-name .
+#docker run --env-file .env your-image-name
+#docker build -f Dockerfile.db -t hftamayo/pgdev:0.0.1 .
+#docker network create ecommerce_network
+#the bellow commands need to be run on the root of the project
+#pg container NEEDS to read env file of the project
+#docker run --name pgdev --network pgdev_network -p 5432:5432 -d --env-file .env hftamayo/pgdev:0.0.1
+#psql -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DB 
