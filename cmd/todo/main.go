@@ -17,7 +17,7 @@ var db *gorm.DB
 
 func main() {
 	var err error
-	fmt.Printf("Starting ToDo GraphQLAPI\n")
+	fmt.Printf("Starting GoToDo API\n")
 
 	r := gin.Default()
 	fmt.Printf("reading environment...\n")
@@ -45,7 +45,7 @@ func main() {
 
 				handler := todo.NewHandler(db)
 				routes.SetupRoutes(r, handler)
-				fmt.Printf("API is up and running")
+				fmt.Printf("GoToDo API is up and running")
 
 				r.GET("/gotodo/healthcheck", func(c *gin.Context) {
 					c.String(http.StatusOK, "GoToDo RestAPI is up and running")
