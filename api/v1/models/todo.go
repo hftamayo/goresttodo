@@ -15,5 +15,6 @@ type Todo struct {
 	Title string `gorm:"type:varchar(100)" json:"title"`
 	Done  bool   `gorm:"default:false" json:"done"`
 	Body  string `gorm:"type:text" json:"body"`
-	Owner 
+	UserID  uint   `json:"user_id"` 
+    User    User   `gorm:"foreignKey:UserID" json:"user"` 
 }
