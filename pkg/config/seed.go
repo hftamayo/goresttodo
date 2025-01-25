@@ -17,18 +17,19 @@ func seedData(db *gorm.DB) error {
 		{Name: "user02", Email: "mary@tamayo.com", Password: os.Getenv("USER02_PASSWORD")},		
     }
 
-    todos := []models.Todo{
-        {UserID: 1, Title: "Todo 1 for user 1"},
-        {UserID: 1, Title: "Todo 2 for user 1"},
-        {UserID: 2, Title: "Todo 1 for user 2"},
-    }
-
-    // Insert the data into the database
     for _, user := range users {
         if err := db.Create(&user).Error; err != nil {
             return err
         }
     }
+
+    todos := []models.Todo{
+        {Title: "backup the database", Body: "create the entire backup using incremental", UserID: users[0].ID},
+        {Title: "test the restore process", Body: "restore the backup and test the process", UserID: users[0].ID},
+        {Title: "supervise things", Body: "invent something to supervise", UserID: users[1].ID},
+    }
+
+    // Insert the data into the database
 
     for _, todo := range todos {
         if err := db.Create(&todo).Error; err != nil {
