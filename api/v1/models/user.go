@@ -17,4 +17,6 @@ type User struct {
 	Name     string `gorm:"type:varchar(50)" json:"name"`
 	Email    string `gorm:"type:varchar(50)" json:"email"`
 	Password string `gorm:"type:varchar(50)" json:"password"`
+	status	 bool   `gorm:"default:true" json:"status"`
+	Todos    []Todo `gorm:"foreignKey:UserID" json:"todos"`
 }
