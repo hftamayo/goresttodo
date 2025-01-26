@@ -4,29 +4,15 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os"
-	"strconv"
 	"time"
 
 	"github.com/hftamayo/gotodo/api/v1/models"
-	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
 var db *gorm.DB
 
-type EnvVars struct {
-	Host     string
-	Port     int
-	User     string
-	Password string
-	Dbname   string
-	Mode     string
-	timeOut  int
-	seedDev  bool
-	seedProd bool
-}
 
 func buildConnectionString(envVars *EnvVars) string {
 	connectionString := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable connect_timeout=%d",
@@ -49,38 +35,6 @@ func isTestEnviro(envVars *EnvVars) bool {
 		fmt.Println("no run mode specified")
 		return false
 	}
-}
-
-func LoadEnvVars() (*EnvVars, error) {
-	if err := godotenv.Load(); err != nil {
-		fmt.Println("Error reading context data")
-		return nil, err
-	}
-	portStr := os.Getenv("POSTGRES_PORT")
-	port, err := strconv.Atoi(portStr)
-	if err != nil {
-		log.Printf("Error converting port to integer.\n%v", err)
-		return nil, err
-	}
-
-	seedDevStr := os.Getenv("SEED_DEVELOPMENT")
-	seedDev, _ := strconv.ParseBool(seedDevStr)
-
-	seedProdStr := os.Getenv("SEED_PRODUCTION")
-	seedProd, _ := strconv.ParseBool(seedProdStr)
-
-	envVars := &EnvVars{
-		Host:     os.Getenv("POSTGRES_HOST"),
-		Port:     port,
-		User:     os.Getenv("POSTGRES_USER"),
-		Password: os.Getenv("POSTGRES_PASSWORD"),
-		Dbname:   os.Getenv("POSTGRES_DB"),
-		Mode:     os.Getenv("GOAPP_MODE"),
-		timeOut:  30,
-		seedDev:  seedDev,
-		seedProd: seedProd,
-	}
-	return envVars, nil
 }
 
 func CheckDataLayerAvailability(envVars *EnvVars) (*gorm.DB, error) {
