@@ -5,10 +5,8 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/hftamayo/gotodo/api/routes"
-	"github.com/hftamayo/gotodo/api/v1/todo"
+	"github.com/hftamayo/gotodo/api/router"
 	"github.com/hftamayo/gotodo/pkg/config"
 )
 

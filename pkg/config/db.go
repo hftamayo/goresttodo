@@ -59,7 +59,7 @@ func CheckDataLayerAvailability(envVars *EnvVars) (*gorm.DB, error) {
 		return db, nil
 	}
 
-	return nil, errors.New("data layer is not available")
+	return errors.New("data layer is not available")
 }
 
 func DataLayerConnect(envVars *EnvVars) (*gorm.DB, error) {
