@@ -32,7 +32,7 @@ func main() {
     }
 
     fmt.Printf("connected to the database, loading last stage: \n")
-    router.SetupRouter(r, db)
+    routes.SetupRouter(r, db)
 
     fmt.Printf("GoToDo API is up and running\n")
     log.Fatal(r.Run(":8001"))
