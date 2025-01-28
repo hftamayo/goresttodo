@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/hftamayo/gotodo/api/router"
+	"github.com/hftamayo/gotodo/api/routes"
 	"github.com/hftamayo/gotodo/pkg/config"
 )
 
