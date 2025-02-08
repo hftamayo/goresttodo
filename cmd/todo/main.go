@@ -26,7 +26,7 @@ func main() {
     }
 
     fmt.Printf("connecting to the database...\n")
-    db, err := config.DataLayerConnect(envVars)
+    db, err = config.DataLayerConnect(envVars)
     if err != nil {
         log.Fatalf("Failed to connect to the database: %v", err)
     }
