@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/hftamayo/gotodo/api/v1/models"
+	"github.com/hftamayo/gotodo/pkg/seeder"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -82,7 +83,7 @@ func DataLayerConnect(envVars *EnvVars) (*gorm.DB, error) {
 		if envVars.seedDev || envVars.seedProd {
 			log.Println("Data seeding required")
 
-			err = seedData(db)
+			err = seeder.seedData(db)
             if err != nil {
                 log.Printf("Error during data seeding.\n%v", err)
                 return nil, err
