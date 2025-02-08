@@ -17,11 +17,16 @@ func seedData(db *gorm.DB) error {
 		{Name: "user02", Email: "mary@tamayo.com", Password: os.Getenv("USER02_PASSWORD")},		
     }
 
+    log.Println("Starting to seed users...")
     for _, user := range users {
+        log.Printf("Seeding user: %s\n", user.Name)
         if err := db.Create(&user).Error; err != nil {
+            log.Printf("Error seeding user %s: %v\n", user.Name, err)
             return err
         }
     }
+
+    log.Println("Finished seeding users.")
 
     todos := []models.Todo{
         {Title: "backup the database", Body: "create the entire backup using incremental", UserID: users[0].ID},
@@ -30,12 +35,13 @@ func seedData(db *gorm.DB) error {
     }
 
     // Insert the data into the database
-
+    log.Println("Starting to seed todos...")
     for _, todo := range todos {
+        log.Printf("Seeding todo: %s\n", todo.Title)
         if err := db.Create(&todo).Error; err != nil {
             return err
         }
     }
-
+    log.Println("Finished seeding todos.")
     return nil
 }
