@@ -1,3 +1,4 @@
 .env
+goresttodo
 scripts/db.sql
 cmd/todo/main
