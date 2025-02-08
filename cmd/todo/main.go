@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hftamayo/gotodo/api/routes"
@@ -21,7 +20,8 @@ func main() {
     }
 
     fmt.Printf("verify data layer availability...\n")
-    if err := config.CheckDataLayerAvailability(envVars); err != nil {
+    db, err := config.CheckDataLayerAvailability(envVars)
+    if err != nil {
         log.Fatalf("Error: Data layer is not available, exiting...: %v", err)
     }
 
