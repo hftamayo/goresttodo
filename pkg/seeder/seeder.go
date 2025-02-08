@@ -9,7 +9,7 @@ import (
     "gorm.io/gorm"
 )
 
-func seedData(db *gorm.DB) error {
+func SeedData(db *gorm.DB) error {
 
     tx := db.Begin()
     if tx.Error != nil {

@@ -83,7 +83,7 @@ func DataLayerConnect(envVars *EnvVars) (*gorm.DB, error) {
 		if envVars.seedDev || envVars.seedProd {
 			log.Println("Data seeding required")
 
-			err = seeder.seedData(db)
+			err = seeder.SeedData(db)
             if err != nil {
                 log.Printf("Error during data seeding.\n%v", err)
                 return nil, err
