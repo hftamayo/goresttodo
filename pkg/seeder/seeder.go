@@ -5,6 +5,7 @@ import (
 	"os"
 
     "github.com/hftamayo/gotodo/api/v1/models"
+    "github.com/hftamayo/gotodo/pkg/utils"
     "gorm.io/gorm"
 )
 
@@ -25,6 +26,14 @@ func seedData(db *gorm.DB) error {
 
     log.Println("Starting to seed users...")
     for i := range users {
+        hashedPassword, err := utils.HashPassword(users[i].Password)
+        if err != nil {
+            log.Printf("Error hashing password for user %s: %v\n", users[i].Name, err)
+            tx.Rollback()
+            return err
+        }
+        users[i].Password = hashedPassword
+
         log.Printf("Seeding user: %s\n", users[i].Name)
         if err := tx.Create(&users[i]).Error; err != nil {
             log.Printf("Error seeding user %s: %v\n", users[i].Name, err)
