@@ -4,29 +4,16 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os"
-	"strconv"
 	"time"
 
 	"github.com/hftamayo/gotodo/api/v1/models"
-	"github.com/joho/godotenv"
+	"github.com/hftamayo/gotodo/pkg/seeder"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
 var db *gorm.DB
 
-type EnvVars struct {
-	Host     string
-	Port     int
-	User     string
-	Password string
-	Dbname   string
-	Mode     string
-	timeOut  int
-	seedDev  bool
-	seedProd bool
-}
 
 func buildConnectionString(envVars *EnvVars) string {
 	connectionString := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable connect_timeout=%d",
@@ -49,38 +36,6 @@ func isTestEnviro(envVars *EnvVars) bool {
 		fmt.Println("no run mode specified")
 		return false
 	}
-}
-
-func LoadEnvVars() (*EnvVars, error) {
-	if err := godotenv.Load(); err != nil {
-		fmt.Println("Error reading context data")
-		return nil, err
-	}
-	portStr := os.Getenv("POSTGRES_PORT")
-	port, err := strconv.Atoi(portStr)
-	if err != nil {
-		log.Printf("Error converting port to integer.\n%v", err)
-		return nil, err
-	}
-
-	seedDevStr := os.Getenv("SEED_DEVELOPMENT")
-	seedDev, _ := strconv.ParseBool(seedDevStr)
-
-	seedProdStr := os.Getenv("SEED_PRODUCTION")
-	seedProd, _ := strconv.ParseBool(seedProdStr)
-
-	envVars := &EnvVars{
-		Host:     os.Getenv("POSTGRES_HOST"),
-		Port:     port,
-		User:     os.Getenv("POSTGRES_USER"),
-		Password: os.Getenv("POSTGRES_PASSWORD"),
-		Dbname:   os.Getenv("POSTGRES_DB"),
-		Mode:     os.Getenv("GOAPP_MODE"),
-		timeOut:  30,
-		seedDev:  seedDev,
-		seedProd: seedProd,
-	}
-	return envVars, nil
 }
 
 func CheckDataLayerAvailability(envVars *EnvVars) (*gorm.DB, error) {
@@ -118,14 +73,22 @@ func DataLayerConnect(envVars *EnvVars) (*gorm.DB, error) {
 			return nil, err
 		}
 
+        // AutoMigrate will create the tables based on the models
+        err = db.AutoMigrate(&models.User{}, &models.Todo{})
+        if err != nil {
+            log.Printf("Error during migration.\n%v", err)
+            return nil, err
+        }		
+
 		if envVars.seedDev || envVars.seedProd {
 			log.Println("Data seeding required")
 
-			err := db.AutoMigrate(&models.User{}, &models.Todo{})
-			if db.Error != nil {
-				log.Printf("Error during data seeding.\n%v", err)
-				return nil, db.Error
-			}
+			err = seeder.SeedData(db)
+            if err != nil {
+                log.Printf("Error during data seeding.\n%v", err)
+                return nil, err
+            }
+			
 			log.Println("Data seeding successful")
 		} else {
 			log.Println("No data seeding required")

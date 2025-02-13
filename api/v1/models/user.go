@@ -1,7 +1,7 @@
 package models
 
 import (
-	"github.com/jinzhu/gorm"
+	"gorm.io/gorm"
 )
 
 // the default gorm struct is this:
@@ -16,5 +16,7 @@ type User struct {
 	gorm.Model
 	Name     string `gorm:"type:varchar(50)" json:"name"`
 	Email    string `gorm:"type:varchar(50)" json:"email"`
-	Password string `gorm:"type:varchar(50)" json:"password"`
+	Password string `gorm:"type:varchar(255)" json:"password"`
+	status	 bool   `gorm:"default:true" json:"status"`
+	Todos    []Todo `gorm:"foreignKey:UserID" json:"todos"`
 }

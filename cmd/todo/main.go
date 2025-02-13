@@ -3,59 +3,37 @@ package main
 import (
 	"fmt"
 	"log"
-	"net/http"
 
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/hftamayo/gotodo/api/routes"
-	"github.com/hftamayo/gotodo/api/v1/todo"
 	"github.com/hftamayo/gotodo/pkg/config"
-	"gorm.io/gorm"
 )
 
-var db *gorm.DB
-
 func main() {
-	var err error
-	fmt.Printf("Starting ToDo GraphQLAPI\n")
+	fmt.Printf("Starting GoToDo API\n")
 
 	r := gin.Default()
 	fmt.Printf("reading environment...\n")
-	envVars, err := config.LoadEnvVars()
-	if err != nil {
-		log.Fatalf("Error loading environment variables: %v", err)
-	} else {
-		fmt.Printf("verify data layer availability...\n")
-		_, err := config.CheckDataLayerAvailability(envVars)
-		if err != nil {
-			log.Fatalf("Error: Data layer is not available, exiting...: %v", err)
-		} else {
-			fmt.Printf("connecting to the database...\n")
-			db, err := config.DataLayerConnect(envVars)
-			if err != nil {
-				log.Fatalf("Failed to connect to the database: %v", err)
-			} else {
-				fmt.Printf("connected to the database, loading last stage: \n")
-				r.Use(cors.New(cors.Config{
-					AllowOrigins:     []string{"http://localhost:5173"},
-					AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"},
-					AllowHeaders:     []string{"Origin, Content-Type, Accept"},
-					AllowCredentials: true,
-				}))
+    envVars, err := config.LoadEnvVars()
+    if err != nil {
+        log.Fatalf("Error loading environment variables: %v", err)
+    }
 
-				handler := todo.NewHandler(db)
-				routes.SetupRoutes(r, handler)
-				fmt.Printf("API is up and running")
+    fmt.Printf("verify data layer availability...\n")
+    db, err := config.CheckDataLayerAvailability(envVars)
+    if err != nil {
+        log.Fatalf("Error: Data layer is not available, exiting...: %v", err)
+    }
 
-				r.GET("/gotodo/healthcheck", func(c *gin.Context) {
-					c.String(http.StatusOK, "GoToDo RestAPI is up and running")
-				})
+    fmt.Printf("connecting to the database...\n")
+    db, err = config.DataLayerConnect(envVars)
+    if err != nil {
+        log.Fatalf("Failed to connect to the database: %v", err)
+    }
 
-				log.Fatal(r.Run(":8001"))
+    fmt.Printf("connected to the database, loading last stage: \n")
+    routes.SetupRouter(r, db)
 
-			}
-		}
-
-	}
-
-}
+    fmt.Printf("GoToDo API is up and running\n")
+    log.Fatal(r.Run(":8001"))
+}	
