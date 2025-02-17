@@ -14,9 +14,9 @@ import (
 
 type User struct {
 	gorm.Model
-	FullName     string `gorm:"type:varchar(50)" json:"name"`
+	FullName string `gorm:"type:varchar(50)" json:"name"`
 	Email    string `gorm:"type:varchar(50)" json:"email"`
 	Password string `gorm:"type:varchar(255)" json:"password"`
-	Status	 bool   `gorm:"default:true" json:"status"`
-	Tasks    []Todo `gorm:"foreignKey:Owner" json:"tasks"`
+	Status   bool   `gorm:"default:true" json:"status"`
+	Tasks    []Task `gorm:"foreignKey:Owner" json:"tasks"`
 }
