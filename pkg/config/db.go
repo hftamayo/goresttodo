@@ -74,7 +74,7 @@ func DataLayerConnect(envVars *EnvVars) (*gorm.DB, error) {
 		}
 
         // AutoMigrate will create the tables based on the models
-        err = db.AutoMigrate(&models.User{}, &models.Todo{})
+        err = db.AutoMigrate(&models.User{}, &models.Task{})
         if err != nil {
             log.Printf("Error during migration.\n%v", err)
             return nil, err
