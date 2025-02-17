@@ -6,6 +6,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
+	"github.com/hftamayo/gotodo/api/v1/errorlog"
 	"github.com/hftamayo/gotodo/api/v1/task"
 	"gorm.io/gorm"
 )
@@ -18,7 +19,13 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, redisClient *redis.Client) {
 		AllowCredentials: true,
 	}))
 
-	taskHandler := task.NewHandler(db)
+	logRepo := errorlog.NewErrorLogRepositoryImpl(redisClient)
+	taskRepo := task.NewTaskRepositoryImpl(db)
+
+	taskService := task.NewTaskService(taskRepo)
+	errorLogService := errorlog.NewErrorLogService(logRepo)
+
+	taskHandler := task.NewHandler(db, taskService, errorLogService)
 
 	SetupTaskRoutes(r, taskHandler)
 
