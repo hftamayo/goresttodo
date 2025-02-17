@@ -6,62 +6,59 @@ import (
 	"github.com/hftamayo/gotodo/api/v1/models"
 )
 
-type TodoService struct {
-	repo TodoRepository
+type TaskService struct {
+	repo TaskRepository
 }
 
-func NewTodoService(repo TodoRepository) *TodoService {
-	return &TodoService{repo}
+func NewTodoService(repo TaskRepository) *TaskService {
+	return &TaskService{repo}
 }
 
-func (s *TodoService) CreateTodo(todo *models.Todo) error {
-	return s.repo.Create(todo)
+func (s *TaskService) List() ([]*models.Task, error) {
+	return s.repo.List(1, 10)
 }
 
-func (s *TodoService) UpdateTodo(todo *models.Todo) error {
-	existingTodo, err := s.repo.GetById(int(todo.ID))
+func (s *TaskService) ListById(id int) (*models.Task, error) {
+	return s.repo.ListById(id)
+}
+
+func (s *TaskService) Create(task *models.Task) error {
+	return s.repo.Create(task)
+}
+
+func (s *TaskService) Update(task *models.Task) error {
+	existingTask, err := s.repo.ListById(int(task.ID))
 	if err != nil {
 		return err
 	}
 
-	if existingTodo == nil {
+	if existingTask == nil {
 		return errors.New("Todo not found")
 	}
 
-	return s.repo.Update(todo)
+	return s.repo.Update(task)
 }
 
-func (s *TodoService) MarkTodoAsDone(id int, done bool) (*models.Todo, error) {
-	// Fetch the existing todo from the database.
-	existingTodo, err := s.repo.GetById(id)
+func (s *TaskService) Done(id int, done bool) (*models.Task, error) {
+	existingTask, err := s.repo.ListById(id)
 	if err != nil {
 		return nil, err
 	}
 
-	// If the todo does not exist, return an error.
-	if existingTodo == nil {
+	if existingTask == nil {
 		return nil, errors.New("Todo not found")
 	}
 
-	// Mark the todo as done.
-	existingTodo.Done = done
+	existingTask.Done = done
 
-	// Save the updated todo in the database.
-	err = s.repo.Update(existingTodo)
+	// Save the updated in the database.
+	err = s.repo.Update(existingTask)
 	if err != nil {
 		return nil, err
 	}
-	return existingTodo, nil
+	return existingTask, nil
 }
 
-func (s *TodoService) GetAllTodos() ([]*models.Todo, error) {
-	return s.repo.GetAll(1, 10)
-}
-
-func (s *TodoService) GetTodoById(id int) (*models.Todo, error) {
-	return s.repo.GetById(id)
-}
-
-func (s *TodoService) DeleteTodoById(id int) error {
+func (s *TaskService) Delete(id int) error {
 	return s.repo.Delete(id)
 }
