@@ -5,16 +5,23 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/hftamayo/gotodo/api/v1/errorlog"
 	"github.com/hftamayo/gotodo/api/v1/models"
 	"gorm.io/gorm"
 )
 
 type Handler struct {
-	Db *gorm.DB
+	Db              *gorm.DB
+	Service         *TaskService
+	ErrorLogService *errorlog.ErrorLogService
 }
 
-func NewHandler(db *gorm.DB) *Handler {
-	return &Handler{Db: db}
+func NewHandler(db *gorm.DB, service *TaskService, errorLogService *errorlog.ErrorLogService) *Handler {
+	return &Handler{
+		Db:              db,
+		Service:         service,
+		ErrorLogService: errorLogService,
+	}
 }
 
 func NewTaskRepositoryImpl(db *gorm.DB) *TaskRepositoryImpl {
@@ -27,10 +34,19 @@ func (h *Handler) List(c *gin.Context) {
 	service := NewTaskService(repo)
 	tasks, err := service.List()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to fetch tasks", " details": err.Error()})
+		h.ErrorLogService.LogError("Task_list", err)
+
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":          http.StatusBadRequest,
+			"resultMessage": "OPERATION_FAILED",
+		})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "Tasks fetched successfully", "data": tasks})
+	c.JSON(http.StatusOK, gin.H{
+		"code":          http.StatusOK,
+		"resultMessage": "OPERATION_SUCCESS",
+		"tasks":         tasks,
+	})
 }
 
 func (h *Handler) ListById(c *gin.Context) {
