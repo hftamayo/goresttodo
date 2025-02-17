@@ -44,22 +44,22 @@ func SeedData(db *gorm.DB) error {
 
     log.Println("Finished seeding users.")
 
-    todos := []models.Todo{
-        {Title: "backup the database", Body: "create the entire backup using incremental", UserID: users[0].ID},
-        {Title: "test the restore process", Body: "restore the backup and test the process", UserID: users[0].ID},
-        {Title: "supervise things", Body: "invent something to supervise", UserID: users[1].ID},
+    tasks := []models.Task{
+        {Title: "backup the database", Description: "create the entire backup using incremental", Owner: users[0].ID},
+        {Title: "test the restore process", Description: "restore the backup and test the process", Owner: users[0].ID},
+        {Title: "supervise things", Description: "invent something to supervise", Owner: users[1].ID},
     }
 
     // Insert the data into the database
-    log.Println("Starting to seed todos...")
-    for _, todo := range todos {
-        log.Printf("Seeding todo: %s\n", todo.Title)
-        if err := tx.Create(&todo).Error; err != nil {
-            log.Printf("Error seeding todo %s: %v\n", todo.Title, err)
+    log.Println("Starting to seed tasks...")
+    for _, task := range tasks {
+        log.Printf("Seeding task: %s\n", task.Title)
+        if err := tx.Create(&task).Error; err != nil {
+            log.Printf("Error seeding todo %s: %v\n", task.Title, err)
             tx.Rollback()
         }
     }
-    log.Println("Finished seeding todos.")
+    log.Println("Finished seeding tasks.")
 
     if err := tx.Commit().Error; err != nil {
         tx.Rollback()
