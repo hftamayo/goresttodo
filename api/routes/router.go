@@ -19,7 +19,7 @@ func SetupRouter(r *gin.Engine, db *gorm.DB) {
 
 	taskHandler := task.NewHandler(db)
 
-	SetupTodoRoutes(r, taskHandler)
+	SetupTaskRoutes(r, taskHandler)
 
 	r.GET("/gotodo/healthcheck", func(c *gin.Context) {
 		c.String(http.StatusOK, "GoToDo RestAPI is up and running")

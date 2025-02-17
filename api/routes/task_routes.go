@@ -5,7 +5,7 @@ import (
 	"github.com/hftamayo/gotodo/api/v1/task"
 )
 
-func SetupTodoRoutes(app *gin.Engine, handler *task.Handler) {
+func SetupTaskRoutes(app *gin.Engine, handler *task.Handler) {
 	const todoIDPath = "/gotodo/task/:id"
 
 	app.GET("/gotodo/task/list", handler.List)
