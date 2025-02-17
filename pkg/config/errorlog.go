@@ -14,7 +14,7 @@ func ErrorLogConnect() *redis.Client {
 	ctx := context.Background()
 	_, err := redisClient.Ping(ctx).Result()
 	if err != nil {
-		return nil, err
+		return nil
 	}
-	return redisClient, nil
+	return redisClient
 }
