@@ -17,21 +17,53 @@ func NewHandler(db *gorm.DB) *Handler {
 	return &Handler{Db: db}
 }
 
-func NewTodoRepositoryImpl(db *gorm.DB) *TodoRepositoryImpl {
-	return &TodoRepositoryImpl{Db: db}
+func NewTaskRepositoryImpl(db *gorm.DB) *TaskRepositoryImpl {
+	return &TaskRepositoryImpl{Db: db}
 }
 
-func (h *Handler) CreateTodo(c *gin.Context) {
+func (h *Handler) List(c *gin.Context) {
 	db := h.Db
-	repo := NewTodoRepositoryImpl(db)
-	service := NewTodoService(repo)
+	repo := NewTaskRepositoryImpl(db)
+	service := NewTaskService(repo)
+	tasks, err := service.List()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to fetch tasks", " details": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Tasks fetched successfully", "data": tasks})
+}
+
+func (h *Handler) ListById(c *gin.Context) {
+	db := h.Db
+	repo := NewTaskRepositoryImpl(db)
+	service := NewTaskService(repo)
+
+	// Parse the ID from the URL parameter.
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		return
+	}
+
+	task, err := service.ListById(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch task", "details": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Task fetched successfully", "data": task})
+}
+
+func (h *Handler) Create(c *gin.Context) {
+	db := h.Db
+	repo := NewTaskRepositoryImpl(db)
+	service := NewTaskService(repo)
 	task := &models.Task{}
 
 	if err := c.ShouldBindJSON(task); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot parse JSON"})
 		return
 	}
-	err := service.CreateTodo(task)
+	err := service.Create(task)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create a new task", "details": err.Error()})
 		return
@@ -39,10 +71,10 @@ func (h *Handler) CreateTodo(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"message": "task created successfully", "data": task})
 }
 
-func (h *Handler) UpdateTodo(c *gin.Context) {
+func (h *Handler) Update(c *gin.Context) {
 	db := h.Db
-	repo := NewTodoRepositoryImpl(db)
-	service := NewTodoService(repo)
+	repo := NewTaskRepositoryImpl(db)
+	service := NewTaskService(repo)
 
 	// Parse the ID from the URL parameter.
 	id, err := strconv.Atoi(c.Param("id"))
@@ -61,7 +93,7 @@ func (h *Handler) UpdateTodo(c *gin.Context) {
 	// Set the ID of the todo to the ID from the URL parameter.
 	task.ID = uint(id)
 
-	err = service.UpdateTodo(task)
+	err = service.Update(task)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update task", "details": err.Error()})
 		return
@@ -70,10 +102,10 @@ func (h *Handler) UpdateTodo(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Task updated successfully", "data": task})
 }
 
-func (h *Handler) UpdateTodoDone(c *gin.Context) {
+func (h *Handler) Done(c *gin.Context) {
 	db := h.Db
-	repo := NewTodoRepositoryImpl(db)
-	service := NewTodoService(repo)
+	repo := NewTaskRepositoryImpl(db)
+	service := NewTaskService(repo)
 
 	// Parse the ID from the URL parameter.
 	id, err := strconv.Atoi(c.Param("id"))
@@ -96,7 +128,7 @@ func (h *Handler) UpdateTodoDone(c *gin.Context) {
 		Done:  done,
 	}
 
-	task, err = service.MarkTodoAsDone(int(task.ID), done) // Pass the ID of the todo instead of the todo itself.
+	task, err = service.Done(int(task.ID), done) // Pass the ID of the todo instead of the todo itself.
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update task", "details": err.Error()})
 		return
@@ -105,22 +137,10 @@ func (h *Handler) UpdateTodoDone(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Task updated successfully", "data": task})
 }
 
-func (h *Handler) GetAllTodos(c *gin.Context) {
+func (h *Handler) Delete(c *gin.Context) {
 	db := h.Db
-	repo := NewTodoRepositoryImpl(db)
-	service := NewTodoService(repo)
-	tasks, err := service.list()
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to fetch tasks", " details": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"message": "Tasks fetched successfully", "data": tasks})
-}
-
-func (h *Handler) GetTodoById(c *gin.Context) {
-	db := h.Db
-	repo := NewTodoRepositoryImpl(db)
-	service := NewTodoService(repo)
+	repo := NewTaskRepositoryImpl(db)
+	service := NewTaskService(repo)
 
 	// Parse the ID from the URL parameter.
 	id, err := strconv.Atoi(c.Param("id"))
@@ -129,27 +149,7 @@ func (h *Handler) GetTodoById(c *gin.Context) {
 		return
 	}
 
-	task, err := service.GetTodoById(id)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch task", "details": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"message": "Task fetched successfully", "data": task})
-}
-
-func (h *Handler) DeleteTodoById(c *gin.Context) {
-	db := h.Db
-	repo := NewTodoRepositoryImpl(db)
-	service := NewTodoService(repo)
-
-	// Parse the ID from the URL parameter.
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
-		return
-	}
-
-	err = service.DeleteTodoById(id)
+	err = service.Delete(id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete task", "details": err.Error()})
 		return
