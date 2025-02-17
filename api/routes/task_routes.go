@@ -2,17 +2,17 @@ package routes
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/hftamayo/gotodo/api/v1/todo"
+	"github.com/hftamayo/gotodo/api/v1/task"
 )
 
-func SetupTodoRoutes(app *gin.Engine, handler *todo.Handler) {
+func SetupTodoRoutes(app *gin.Engine, handler *task.Handler) {
 	const todoIDPath = "/gotodo/task/:id"
 
-	app.POST("/gotodo/task/new", handler.CreateTodo)
-	app.PATCH(todoIDPath+"/done", handler.UpdateTodoDone)
-	app.PATCH(todoIDPath, handler.UpdateTodo)
-	app.GET("/gotodo/task/list", handler.GetAllTodos)
-	app.GET(todoIDPath, handler.GetTodoById)
-	app.DELETE(todoIDPath, handler.DeleteTodoById)
+	app.GET("/gotodo/task/list", handler.List)
+	app.GET(todoIDPath, handler.ListById)
+	app.POST("/gotodo/task/new", handler.Create)
+	app.PATCH(todoIDPath, handler.Update)
+	app.PATCH(todoIDPath+"/done", handler.Done)
+	app.DELETE(todoIDPath, handler.Delete)
 
 }
