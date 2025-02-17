@@ -11,7 +11,16 @@ type TaskRepositoryImpl struct {
 	Db *gorm.DB
 }
 
-func (r *TaskRepositoryImpl) GetById(id int) (*models.Task, error) {
+func (r *TaskRepositoryImpl) List(page, pageSize int) ([]*models.Task, error) {
+	var tasks []*models.Task
+	offset := (page - 1) * pageSize
+	if result := r.Db.Offset(offset).Limit(pageSize).Find(&tasks); result.Error != nil {
+		return nil, result.Error
+	}
+	return tasks, nil
+}
+
+func (r *TaskRepositoryImpl) ListById(id int) (*models.Task, error) {
 	var task models.Task
 	if result := r.Db.First(&task, id); result.Error != nil {
 		// If the record is not found, GORM returns a "record not found" error.
@@ -22,15 +31,6 @@ func (r *TaskRepositoryImpl) GetById(id int) (*models.Task, error) {
 		return nil, result.Error
 	}
 	return &task, nil
-}
-
-func (r *TaskRepositoryImpl) GetAll(page, pageSize int) ([]*models.Task, error) {
-	var tasks []*models.Task
-	offset := (page - 1) * pageSize
-	if result := r.Db.Offset(offset).Limit(pageSize).Find(&tasks); result.Error != nil {
-		return nil, result.Error
-	}
-	return tasks, nil
 }
 
 func (r *TaskRepositoryImpl) Create(task *models.Task) error {
