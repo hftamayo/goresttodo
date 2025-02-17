@@ -6,7 +6,7 @@ import (
 	"github.com/go-redis/redis/v8"
 )
 
-func ErrorLogConnect() *redis.Client {
+func ErrorLogConnect() (*redis.Client, error) {
 	redisClient := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",
 	})
@@ -14,7 +14,7 @@ func ErrorLogConnect() *redis.Client {
 	ctx := context.Background()
 	_, err := redisClient.Ping(ctx).Result()
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return redisClient
+	return redisClient, nil
 }
