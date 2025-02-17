@@ -7,13 +7,13 @@ import (
 	"gorm.io/gorm"
 )
 
-type TodoRepositoryImpl struct {
+type TaskRepositoryImpl struct {
 	Db *gorm.DB
 }
 
-func (r *TodoRepositoryImpl) GetById(id int) (*models.Todo, error) {
-	var todo models.Todo
-	if result := r.Db.First(&todo, id); result.Error != nil {
+func (r *TaskRepositoryImpl) GetById(id int) (*models.Task, error) {
+	var task models.Task
+	if result := r.Db.First(&task, id); result.Error != nil {
 		// If the record is not found, GORM returns a "record not found" error.
 		// You might want to return nil, nil in this case instead of nil, error.
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
@@ -21,42 +21,42 @@ func (r *TodoRepositoryImpl) GetById(id int) (*models.Todo, error) {
 		}
 		return nil, result.Error
 	}
-	return &todo, nil
+	return &task, nil
 }
 
-func (r *TodoRepositoryImpl) GetAll(page, pageSize int) ([]*models.Todo, error) {
-	var todos []*models.Todo
+func (r *TaskRepositoryImpl) GetAll(page, pageSize int) ([]*models.Task, error) {
+	var tasks []*models.Task
 	offset := (page - 1) * pageSize
-	if result := r.Db.Offset(offset).Limit(pageSize).Find(&todos); result.Error != nil {
+	if result := r.Db.Offset(offset).Limit(pageSize).Find(&tasks); result.Error != nil {
 		return nil, result.Error
 	}
-	return todos, nil
+	return tasks, nil
 }
 
-func (r *TodoRepositoryImpl) Create(todo *models.Todo) error {
-	if result := r.Db.Create(todo); result.Error != nil {
+func (r *TaskRepositoryImpl) Create(task *models.Task) error {
+	if result := r.Db.Create(task); result.Error != nil {
 		return result.Error
 	}
 	return nil
 }
 
-func (r *TodoRepositoryImpl) Update(todo *models.Todo) error {
-	if result := r.Db.Save(todo); result.Error != nil {
+func (r *TaskRepositoryImpl) Update(task *models.Task) error {
+	if result := r.Db.Save(task); result.Error != nil {
 		return result.Error
 	}
 	return nil
 }
 
-func (r *TodoRepositoryImpl) Delete(id int) error {
-	todo := &models.Todo{}
-	if result := r.Db.First(todo, id); result.Error != nil {
+func (r *TaskRepositoryImpl) Delete(id int) error {
+	task := &models.Task{}
+	if result := r.Db.First(task, id); result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return nil
 		}
 		return result.Error
 	}
 
-	if result := r.Db.Delete(todo); result.Error != nil {
+	if result := r.Db.Delete(task); result.Error != nil {
 		return result.Error
 	}
 	return nil
