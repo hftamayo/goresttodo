@@ -1,4 +1,4 @@
-package todo
+package task
 
 import (
 	"github.com/hftamayo/gotodo/api/v1/models"
