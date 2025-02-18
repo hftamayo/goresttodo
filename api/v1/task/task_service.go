@@ -2,24 +2,64 @@ package task
 
 import (
 	"errors"
+	"strconv"
+	"time"
 
 	"github.com/hftamayo/gotodo/api/v1/models"
+	"github.com/hftamayo/gotodo/pkg/utils"
 )
 
 type TaskService struct {
-	repo TaskRepository
+	repo  TaskRepository
+	cache *utils.Cache
 }
 
-func NewTaskService(repo TaskRepository) *TaskService {
-	return &TaskService{repo}
+func NewTaskService(repo TaskRepository, cache *utils.Cache) *TaskService {
+	return &TaskService{repo: repo, cache: cache}
 }
 
 func (s *TaskService) List() ([]*models.Task, error) {
-	return s.repo.List(1, 10)
+	var tasks []*models.Task
+	cacheKey := "tasks_list"
+
+	// Try to get tasks from cache
+	err := s.cache.Get(cacheKey, &tasks)
+	if err == nil {
+		return tasks, nil
+	}
+
+	// If cache miss, get tasks from repository
+	tasks, err = s.repo.List(1, 10)
+	if err != nil {
+		return nil, err
+	}
+
+	// Cache the tasks
+	s.cache.Set(cacheKey, tasks, 10*time.Minute)
+
+	return tasks, nil
 }
 
 func (s *TaskService) ListById(id int) (*models.Task, error) {
-	return s.repo.ListById(id)
+	var task *models.Task
+	cacheKey := "task_" + strconv.Itoa(id)
+
+	// Try to get task from cache
+	err := s.cache.Get(cacheKey, &task)
+	if err == nil {
+		return task, nil
+	}
+
+	// If cache miss, get task from repository
+	task, err = s.repo.ListById(id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Cache the task
+	s.cache.Set(cacheKey, task, 10*time.Minute)
+
+	return task, nil
 }
 
 func (s *TaskService) Create(task *models.Task) error {
