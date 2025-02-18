@@ -2,13 +2,14 @@ package config
 
 import (
 	"context"
+	"os"
 
 	"github.com/go-redis/redis/v8"
 )
 
 func ErrorLogConnect() (*redis.Client, error) {
 	redisClient := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
+		Addr: os.Getenv("REDIS_HOST") + ":" + os.Getenv("REDIS_PORT"),
 	})
 
 	ctx := context.Background()
