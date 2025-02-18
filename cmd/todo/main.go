@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/hftamayo/gotodo/api/routes"
 	"github.com/hftamayo/gotodo/pkg/config"
+	"github.com/hftamayo/gotodo/pkg/utils"
 )
 
 func main() {
@@ -37,8 +38,11 @@ func main() {
 		log.Fatalf("Failed to connect to the error logger: %v", err)
 	}
 
+	cache :=
+		utils.NewCache(redisClient)
+
 	fmt.Printf("connected to the database, loading last stage: \n")
-	routes.SetupRouter(r, db, redisClient)
+	routes.SetupRouter(r, db, redisClient, cache)
 
 	fmt.Printf("GoToDo API is up and running\n")
 	log.Fatal(r.Run(":8001"))
