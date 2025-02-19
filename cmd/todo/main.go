@@ -3,10 +3,12 @@ package main
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hftamayo/gotodo/api/routes"
 	"github.com/hftamayo/gotodo/pkg/config"
+	"github.com/hftamayo/gotodo/pkg/middleware"
 	"github.com/hftamayo/gotodo/pkg/utils"
 )
 
@@ -38,8 +40,14 @@ func main() {
 		log.Fatalf("Failed to connect to the error logger: %v", err)
 	}
 
-	cache :=
-		utils.NewCache(redisClient)
+	//setting up the cache
+	fmt.Printf("setting up the cache...\n")
+	cache := utils.NewCache(redisClient)
+
+	//setting up the rate limiter
+	fmt.Printf("setting up the rate limiter...\n")
+	rateLimiter := utils.NewRateLimiter(redisClient, 100, time.Minute)
+	r.Use(middleware.RateLimitMiddleware(rateLimiter))
 
 	fmt.Printf("connected to the database, loading last stage: \n")
 	routes.SetupRouter(r, db, redisClient, cache)
