@@ -9,7 +9,6 @@ import (
 	"github.com/hftamayo/gotodo/api/routes"
 	"github.com/hftamayo/gotodo/pkg/config"
 	"github.com/hftamayo/gotodo/pkg/middleware"
-	"github.com/hftamayo/gotodo/pkg/utils"
 )
 
 func main() {
@@ -42,11 +41,11 @@ func main() {
 
 	//setting up the cache
 	fmt.Printf("setting up the cache...\n")
-	cache := utils.NewCache(redisClient)
+	cache := config.SetupCache(redisClient)
 
 	//setting up the rate limiter
 	fmt.Printf("setting up the rate limiter...\n")
-	rateLimiter := utils.NewRateLimiter(redisClient, 100, time.Minute)
+	rateLimiter := config.SetupRateLimiter(redisClient, 100, time.Minute)
 	r.Use(middleware.RateLimitMiddleware(rateLimiter))
 
 	fmt.Printf("connected to the database, loading last stage: \n")
