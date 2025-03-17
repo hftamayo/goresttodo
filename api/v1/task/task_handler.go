@@ -9,6 +9,7 @@ import (
 	"github.com/hftamayo/gotodo/api/v1/models"
 	"github.com/hftamayo/gotodo/pkg/utils"
 	"gorm.io/gorm"
+	"github.com/go-redis/redis/v8"
 )
 
 type Handler struct {
@@ -16,9 +17,16 @@ type Handler struct {
 	Service         *TaskService
 	ErrorLogService *errorlog.ErrorLogService
 	cache 		 	*utils.Cache
+	redisClient 	*redis.Client
 }
 
 func NewHandler(db *gorm.DB, service *TaskService, errorLogService *errorlog.ErrorLogService) *Handler {
+	redisClient := redis.NewClient(&redis.Options{
+        Addr:     "localhost:6379", // Redis server address
+        Password: "",               // no password set
+        DB:       0,                // use default DB
+    })	
+
 	return &Handler{
 		Db:              db,
 		Service:         service,
