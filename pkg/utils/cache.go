@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/redis/v9"
 )
 
 type Cache struct {

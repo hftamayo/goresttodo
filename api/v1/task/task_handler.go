@@ -9,7 +9,7 @@ import (
 	"github.com/hftamayo/gotodo/api/v1/models"
 	"github.com/hftamayo/gotodo/pkg/utils"
 	"gorm.io/gorm"
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/redis/v9"
 )
 
 type Handler struct {
@@ -31,7 +31,8 @@ func NewHandler(db *gorm.DB, service *TaskService, errorLogService *errorlog.Err
 		Db:              db,
 		Service:         service,
 		ErrorLogService: errorLogService,
-		cache:           utils.NewCache(),
+		cache:           utils.NewCache(redisClient),
+		redisClient:     redisClient,
 	}
 }
 
