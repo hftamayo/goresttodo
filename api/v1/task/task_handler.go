@@ -9,7 +9,7 @@ import (
 	"github.com/hftamayo/gotodo/api/v1/models"
 	"github.com/hftamayo/gotodo/pkg/utils"
 	"gorm.io/gorm"
-	"github.com/redis/redis/v9"
+	"github.com/redis/go-redis/v9"
 )
 
 type Handler struct {
