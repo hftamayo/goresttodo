@@ -15,6 +15,7 @@ type Handler struct {
 	Db              *gorm.DB
 	Service         *TaskService
 	ErrorLogService *errorlog.ErrorLogService
+	cache 		 	*utils.Cache
 }
 
 func NewHandler(db *gorm.DB, service *TaskService, errorLogService *errorlog.ErrorLogService) *Handler {
@@ -22,6 +23,7 @@ func NewHandler(db *gorm.DB, service *TaskService, errorLogService *errorlog.Err
 		Db:              db,
 		Service:         service,
 		ErrorLogService: errorLogService,
+		cache:           utils.NewCache(),
 	}
 }
 
@@ -32,7 +34,8 @@ func NewTaskRepositoryImpl(db *gorm.DB) *TaskRepositoryImpl {
 func (h *Handler) List(c *gin.Context) {
 	db := h.Db
 	repo := NewTaskRepositoryImpl(db)
-	service := NewTaskService(repo)
+
+	service := NewTaskService(repo, h.cache)
 	tasks, err := service.List()
 	if err != nil {
 		h.ErrorLogService.LogError("Task_list", err)
@@ -53,7 +56,7 @@ func (h *Handler) List(c *gin.Context) {
 func (h *Handler) ListById(c *gin.Context) {
 	db := h.Db
 	repo := NewTaskRepositoryImpl(db)
-	service := NewTaskService(repo)
+	service := NewTaskService(repo, h.cache)
 
 	// Parse the ID from the URL parameter.
 	id, err := strconv.Atoi(c.Param("id"))
@@ -84,7 +87,7 @@ func (h *Handler) ListById(c *gin.Context) {
 func (h *Handler) Create(c *gin.Context) {
 	db := h.Db
 	repo := NewTaskRepositoryImpl(db)
-	service := NewTaskService(repo)
+	service := NewTaskService(repo, h.cache)
 	task := &models.Task{}
 
 	if err := c.ShouldBindJSON(task); err != nil {
@@ -114,7 +117,7 @@ func (h *Handler) Create(c *gin.Context) {
 func (h *Handler) Update(c *gin.Context) {
 	db := h.Db
 	repo := NewTaskRepositoryImpl(db)
-	service := NewTaskService(repo)
+	service := NewTaskService(repo, h.cache)
 
 	// Parse the ID from the URL parameter.
 	id, err := strconv.Atoi(c.Param("id"))
@@ -161,7 +164,7 @@ func (h *Handler) Update(c *gin.Context) {
 func (h *Handler) Done(c *gin.Context) {
 	db := h.Db
 	repo := NewTaskRepositoryImpl(db)
-	service := NewTaskService(repo)
+	service := NewTaskService(repo, h.cache)
 
 	// Parse the ID from the URL parameter.
 	id, err := strconv.Atoi(c.Param("id"))
@@ -216,7 +219,7 @@ func (h *Handler) Done(c *gin.Context) {
 func (h *Handler) Delete(c *gin.Context) {
 	db := h.Db
 	repo := NewTaskRepositoryImpl(db)
-	service := NewTaskService(repo)
+	service := NewTaskService(repo, h.cache)
 
 	// Parse the ID from the URL parameter.
 	id, err := strconv.Atoi(c.Param("id"))
