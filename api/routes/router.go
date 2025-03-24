@@ -5,10 +5,10 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/go-redis/redis/v8"
 	"github.com/hftamayo/gotodo/api/v1/errorlog"
 	"github.com/hftamayo/gotodo/api/v1/task"
 	"github.com/hftamayo/gotodo/pkg/utils"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
 
