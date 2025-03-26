@@ -1,8 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -33,10 +38,10 @@ func main() {
 		log.Fatalf("Failed to connect to the database: %v", err)
 	}
 
-	fmt.Printf("loading error logger...\n")
+	fmt.Printf("Setting up Redis connection......\n")
 	redisClient, err := config.ErrorLogConnect()
 	if err != nil {
-		log.Fatalf("Failed to connect to the error logger: %v", err)
+		log.Fatalf("Failed to connect to Redis: %v", err)
 	}
 
 	//setting up the cache
@@ -48,9 +53,38 @@ func main() {
 	rateLimiter := config.SetupRateLimiter(redisClient, 100, time.Minute)
 	r.Use(middleware.RateLimitMiddleware(rateLimiter))
 
-	fmt.Printf("connected to the database, loading last stage: \n")
+	fmt.Printf("Setting up routes... \n")
 	routes.SetupRouter(r, db, redisClient, cache)
 
-	fmt.Printf("GoToDo API is up and running\n")
-	log.Fatal(r.Run(":8001"))
+    // Server configuration
+    server := &http.Server{
+        Addr:         fmt.Sprintf(":%d", envVars.AppPort),
+        Handler:      r,
+        ReadTimeout:  15 * time.Second,
+        WriteTimeout: 15 * time.Second,
+    }	
+
+    // Graceful shutdown
+    go func() {
+        fmt.Printf("GoToDo API is running on port %d\n", envVars.AppPort)
+        if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+            log.Fatalf("Failed to start server: %v", err)
+        }
+    }()
+
+    // Wait for interrupt signal
+    quit := make(chan os.Signal, 1)
+    signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+    <-quit
+
+    // Graceful shutdown with timeout
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    defer cancel()
+
+    fmt.Println("Shutting down server...")
+    if err := server.Shutdown(ctx); err != nil {
+        log.Fatalf("Server forced to shutdown: %v", err)
+    }
+
+    fmt.Println("Server exiting")
 }
