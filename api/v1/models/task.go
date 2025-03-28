@@ -10,11 +10,11 @@ import "gorm.io/gorm"
 //     DeletedAt *time.Time `sql:"index"`
 // }
 
-type Todo struct {
+type Task struct {
 	gorm.Model
 	Title string `gorm:"type:varchar(100)" json:"title"`
+	Description  string `gorm:"type:text" json:"body"`
 	Done  bool   `gorm:"default:false" json:"done"`
-	Body  string `gorm:"type:text" json:"body"`
-	UserID  uint   `json:"user_id"` 
-    User    User   `gorm:"foreignKey:UserID" json:"user"` 
+	Owner  uint   `json:"owner"` 
+    User    User   `gorm:"foreignKey:Owner" json:"user"` 
 }

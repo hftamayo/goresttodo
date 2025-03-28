@@ -12,9 +12,6 @@ import (
 	"gorm.io/gorm"
 )
 
-var db *gorm.DB
-
-
 func buildConnectionString(envVars *EnvVars) string {
 	connectionString := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable connect_timeout=%d",
 		envVars.Host, envVars.Port, envVars.User, envVars.Password, envVars.Dbname, envVars.timeOut)
@@ -73,22 +70,22 @@ func DataLayerConnect(envVars *EnvVars) (*gorm.DB, error) {
 			return nil, err
 		}
 
-        // AutoMigrate will create the tables based on the models
-        err = db.AutoMigrate(&models.User{}, &models.Todo{})
-        if err != nil {
-            log.Printf("Error during migration.\n%v", err)
-            return nil, err
-        }		
+		// AutoMigrate will create the tables based on the models
+		err = db.AutoMigrate(&models.User{}, &models.Task{})
+		if err != nil {
+			log.Printf("Error during migration.\n%v", err)
+			return nil, err
+		}
 
 		if envVars.seedDev || envVars.seedProd {
 			log.Println("Data seeding required")
 
 			err = seeder.SeedData(db)
-            if err != nil {
-                log.Printf("Error during data seeding.\n%v", err)
-                return nil, err
-            }
-			
+			if err != nil {
+				log.Printf("Error during data seeding.\n%v", err)
+				return nil, err
+			}
+
 			log.Println("Data seeding successful")
 		} else {
 			log.Println("No data seeding required")

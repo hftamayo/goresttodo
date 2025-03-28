@@ -15,6 +15,7 @@ type EnvVars struct {
 	User     string
 	Password string
 	Dbname   string
+	AppPort  int
 	Mode     string
 	timeOut  int
 	seedDev  bool
@@ -34,6 +35,13 @@ func LoadEnvVars() (*EnvVars, error) {
 		return nil, err
 	}
 
+	appPortStr := os.Getenv("GOAPP_PORT")
+	appPort, err := strconv.Atoi(appPortStr)
+	if err != nil {
+		log.Printf("Error converting port to integer.\n%v", err)
+		return nil, err
+	}	
+
 	seedDevStr := os.Getenv("SEED_DEVELOPMENT")
 	seedDev, _ := strconv.ParseBool(seedDevStr)
 
@@ -43,6 +51,7 @@ func LoadEnvVars() (*EnvVars, error) {
 	envVars := &EnvVars{
 		Host:     os.Getenv("POSTGRES_HOST"),
 		Port:     port,
+		AppPort:  appPort,
 		User:     os.Getenv("POSTGRES_USER"),
 		Password: os.Getenv("POSTGRES_PASSWORD"),
 		Dbname:   os.Getenv("POSTGRES_DB"),
