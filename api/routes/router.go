@@ -31,6 +31,9 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, redisClient *redis.Client, cache *u
 	SetupTaskRoutes(r, taskHandler)
 
 	r.GET("/gotodo/healthcheck", func(c *gin.Context) {
-		c.String(http.StatusOK, "GoToDo RestAPI is up and running")
+		c.JSON(http.StatusOK, gin.H {
+			"code":          http.StatusOK,
+			"resultMessage": "GoToDo RestAPI is up and running",
+		})
 	})
 }
