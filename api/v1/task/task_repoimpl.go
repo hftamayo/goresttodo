@@ -41,10 +41,14 @@ func (r *TaskRepositoryImpl) Create(task *models.Task) error {
 }
 
 func (r *TaskRepositoryImpl) Update(task *models.Task) error {
-	if result := r.Db.Save(task); result.Error != nil {
-		return result.Error
-	}
-	return nil
+     var existingTask models.Task
+    if err := r.Db.First(&existingTask, task.ID).Error; err != nil {
+        return err
+    }
+
+    task.Owner = existingTask.Owner
+
+    return r.Db.Save(task).Error
 }
 
 func (r *TaskRepositoryImpl) Delete(id int) error {

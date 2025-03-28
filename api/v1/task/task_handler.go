@@ -8,8 +8,8 @@ import (
 	"github.com/hftamayo/gotodo/api/v1/errorlog"
 	"github.com/hftamayo/gotodo/api/v1/models"
 	"github.com/hftamayo/gotodo/pkg/utils"
-	"gorm.io/gorm"
 	"github.com/redis/go-redis/v9"
+	"gorm.io/gorm"
 )
 
 type Handler struct {
@@ -124,50 +124,55 @@ func (h *Handler) Create(c *gin.Context) {
 }
 
 func (h *Handler) Update(c *gin.Context) {
-	db := h.Db
-	repo := NewTaskRepositoryImpl(db)
-	service := NewTaskService(repo, h.cache)
+    id, err := strconv.Atoi(c.Param("id"))
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{
+            "code":          http.StatusBadRequest,
+            "resultMessage": utils.OperationFailed,
+            "error":        "Invalid ID",
+        })
+        return
+    }
 
-	// Parse the ID from the URL parameter.
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		h.ErrorLogService.LogError("Task_update", err)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code":          http.StatusBadRequest,
-			"resultMessage": utils.OperationFailed,
-		})
-		return
-	}
+    existingTask, err := h.Service.ListById(id)
+    if err != nil {
+        h.ErrorLogService.LogError("Task_update_fetch", err)
+        c.JSON(http.StatusNotFound, gin.H{
+            "code":          http.StatusNotFound,
+            "resultMessage": utils.OperationFailed,
+            "error":        "Task not found",
+        })
+        return
+    }
 
-	// Parse the updated todo from the request body.
-	task := &models.Task{}
-	if err := c.ShouldBindJSON(task); err != nil {
-		h.ErrorLogService.LogError("Task_update", err)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code":          http.StatusBadRequest,
-			"resultMessage": utils.OperationFailed,
-		})
-		return
-	}
+    updatedTask := &models.Task{}
+    if err := c.ShouldBindJSON(updatedTask); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{
+            "code":          http.StatusBadRequest,
+            "resultMessage": utils.OperationFailed,
+            "error":        "Invalid request body",
+        })
+        return
+    }
 
-	// Set the ID of the todo to the ID from the URL parameter.
-	task.ID = uint(id)
+    updatedTask.ID = uint(id)
+    updatedTask.Owner = existingTask.Owner
 
-	err = service.Update(task)
-	if err != nil {
-		h.ErrorLogService.LogError("Task_update", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":          http.StatusInternalServerError,
-			"resultMessage": utils.OperationFailed,
-		})
-		return
-	}
+    err = h.Service.Update(updatedTask)
+    if err != nil {
+        h.ErrorLogService.LogError("Task_update", err)
+        c.JSON(http.StatusInternalServerError, gin.H{
+            "code":          http.StatusInternalServerError,
+            "resultMessage": utils.OperationFailed,
+        })
+        return
+    }
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":          http.StatusOK,
-		"resultMessage": utils.OperationSuccess,
-		"task":          task,
-	})
+    c.JSON(http.StatusOK, gin.H{
+        "code":          http.StatusOK,
+        "resultMessage": utils.OperationSuccess,
+        "task":         updatedTask,
+    })
 }
 
 func (h *Handler) Done(c *gin.Context) {
