@@ -1,0 +1,11 @@
+FROM redis:6.2-alpine
+
+EXPOSE 6379
+
+CMD ["redis-server"]
+
+#docker build -f Dockerfile.redis -t hftamayo/redisdev:0.0.1 .
+#docker run --name redisdev --network pgdev_network -p 6379:6379 -d hftamayo/redisdev:0.0.1
+#docker logs redisdev
+#docker exec -it redisdev sh
+#redis-cli ping

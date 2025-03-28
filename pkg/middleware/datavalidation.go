@@ -26,7 +26,7 @@ func ValidateUserMiddleware(next http.Handler) http.Handler {
 }
 
 func validateUser(user models.User) error {
-	if user.Name == "" {
+	if user.FullName == "" {
 		return errors.New("name is required")
 	}
 	if user.Email == "" {
