@@ -24,3 +24,6 @@ COPY .env .
 EXPOSE 8001
 
 CMD ["./gotodo"]
+#how to run this file:
+#docker build --no-cache --platform linux/amd64 -t hftamayo/goresttodo:0.1.3-experimental .
+#docker run --name goresttodo -p 8001:8001 -d --env-file .env goresttodo:0.1.3-experimental
