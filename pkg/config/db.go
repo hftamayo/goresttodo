@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"regexp"
 	"time"
 
 	"github.com/hftamayo/gotodo/api/v1/models"
@@ -36,28 +37,53 @@ func isTestEnviro(envVars *EnvVars) bool {
 }
 
 func CheckDataLayerAvailability(envVars *EnvVars) (*gorm.DB, error) {
-	connectionString := buildConnectionString(envVars)
+    connectionString := buildConnectionString(envVars)
+    maxRetries := 3
+    retryDelay := 30 * time.Second
 
-	for i := 0; i < 3; i++ {
-		start := time.Now() // Start the timer
+    for i := 0; i < maxRetries; i++ {
+        start := time.Now()
+        fmt.Printf("Attempting to connect to database (attempt %d/%d)...\n", i+1, maxRetries)
+        fmt.Printf("Connection string: %s\n", maskConnectionString(connectionString))
 
-		db, err := gorm.Open(postgres.Open(connectionString), &gorm.Config{})
-		if err != nil {
-			elapsed := time.Since(start) // Calculate elapsed time
+        db, err := gorm.Open(postgres.Open(connectionString), &gorm.Config{})
+        elapsed := time.Since(start)
 
-			if i == 0 {
-				log.Printf("First connection attempt unsuccessful.\n%v", err)
-			} else {
-				log.Printf("Connection attempt %d unsuccessful. Elapsed time: %v\n%v", i+1, elapsed, err)
-			}
+        if err != nil {
+            log.Printf("Connection attempt %d failed after %v: %v\n", i+1, elapsed, err)
+            
+            if i < maxRetries-1 {
+                fmt.Printf("Retrying in %v...\n", retryDelay)
+                time.Sleep(retryDelay)
+                continue
+            }
+            return nil, fmt.Errorf("failed to connect after %d attempts: %v", maxRetries, err)
+        }
 
-			time.Sleep(30 * time.Second)
-			continue
-		}
-		return db, nil
-	}
+        // Test the connection
+        sqlDB, err := db.DB()
+        if err != nil {
+            log.Printf("Error getting underlying *sql.DB: %v\n", err)
+            return nil, err
+        }
 
-	return nil, errors.New("data layer is not available")
+        err = sqlDB.Ping()
+        if err != nil {
+            log.Printf("Error pinging database: %v\n", err)
+            return nil, err
+        }
+
+        fmt.Printf("Successfully connected to database after %v\n", elapsed)
+        return db, nil
+    }
+
+    return nil, errors.New("data layer is not available")
+}
+
+// Helper function to mask sensitive information in connection string
+func maskConnectionString(connStr string) string {
+    // Replace password with asterisks but keep other information visible
+    return regexp.MustCompile(`password=([^ ]+)`).ReplaceAllString(connStr, "password=*****")
 }
 
 func DataLayerConnect(envVars *EnvVars) (*gorm.DB, error) {
