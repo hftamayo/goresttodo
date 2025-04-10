@@ -14,13 +14,13 @@ import (
 
 type Handler struct {
 	Db              *gorm.DB
-	Service         *TaskService
+	Service         TaskServiceInterface
 	ErrorLogService *errorlog.ErrorLogService
 	cache 		 	*utils.Cache
 	redisClient 	*redis.Client
 }
 
-func NewHandler(db *gorm.DB, service *TaskService, errorLogService *errorlog.ErrorLogService) *Handler {
+func NewHandler(db *gorm.DB, service TaskServiceInterface, errorLogService *errorlog.ErrorLogService) *Handler {
 	redisClient := redis.NewClient(&redis.Options{
         Addr:     "localhost:6379", // Redis server address
         Password: "",               // no password set
