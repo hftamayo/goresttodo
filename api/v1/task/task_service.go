@@ -9,6 +9,8 @@ import (
 	"github.com/hftamayo/gotodo/pkg/utils"
 )
 
+var _ TaskServiceInterface = (*TaskService)(nil)
+
 type TaskService struct {
 	repo  TaskRepository
 	cache *utils.Cache
