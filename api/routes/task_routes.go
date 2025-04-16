@@ -6,11 +6,11 @@ import (
 )
 
 func SetupTaskRoutes(app *gin.Engine, handler *task.Handler) {
-	const todoIDPath = "/gotodo/task/:id"
+	const todoIDPath = "/tasks/task/:id"
 
-	app.GET("/gotodo/task/list", handler.List)
+	app.GET("/tasks/task/list", handler.List)
 	app.GET(todoIDPath, handler.ListById)
-	app.POST("/gotodo/task/new", handler.Create)
+	app.POST("/tasks/task", handler.Create)
 	app.PATCH(todoIDPath, handler.Update)
 	app.PATCH(todoIDPath+"/done", handler.Done)
 	app.DELETE(todoIDPath, handler.Delete)
