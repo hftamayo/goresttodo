@@ -1,11 +1,10 @@
 package routes
 
 import (
-	"net/http"
-
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/hftamayo/gotodo/api/v1/errorlog"
+	"github.com/hftamayo/gotodo/api/v1/health"
 	"github.com/hftamayo/gotodo/api/v1/task"
 	"github.com/hftamayo/gotodo/pkg/utils"
 	"github.com/redis/go-redis/v9"
@@ -27,13 +26,8 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, redisClient *redis.Client, cache *u
 	errorLogService := errorlog.NewErrorLogService(logRepo)
 
 	taskHandler := task.NewHandler(db, taskService, errorLogService)
+	healthHandler := health.NewHealthHandler(db)
 
 	SetupTaskRoutes(r, taskHandler)
-
-	r.GET("/gotodo/healthcheck", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H {
-			"code":          http.StatusOK,
-			"resultMessage": "GoToDo RestAPI is up and running",
-		})
-	})
+	SetupHealthCheckRoutes(r, healthHandler)
 }
