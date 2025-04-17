@@ -2,10 +2,10 @@ package routes
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/hftamayo/gotodo/api/v1/hc"
+	"github.com/hftamayo/gotodo/api/v1/health"
 )
 
-func SetupHealthCheckRoutes(app *gin.Engine, handler *hc.Handler) {
+func SetupHealthCheckRoutes(app *gin.Engine, handler *health.HealthHandler) {
 	const hcPath = "/tasks/healthcheck"
 
 	app.GET(hcPath, handler.AppStatus)
