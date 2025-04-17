@@ -33,11 +33,6 @@ type DbHealthDetails struct {
     Error         string  `json:"error,omitempty"`
 }
 
-type HealthResponse struct {
-    App AppHealthDetails `json:"app"`
-    Db  DbHealthDetails `json:"db"`
-}
-
 func NewHealthHandler(db *gorm.DB) *HealthHandler {
     return &HealthHandler{
         db:        db,
@@ -45,42 +40,45 @@ func NewHealthHandler(db *gorm.DB) *HealthHandler {
     }
 }
 
-func (h *HealthHandler) Check(c *gin.Context) {
+func (h *HealthHandler) AppStatus(c *gin.Context) {
     now := time.Now()
     var mem runtime.MemStats
     runtime.ReadMemStats(&mem)
 
-    health := HealthResponse{
-        App: AppHealthDetails{
-            Timestamp: now.UTC().Format(time.RFC3339),
-            Uptime:    now.Sub(h.startTime).Seconds(),
-            MemoryUsage: MemoryUsage{
-                Total: mem.TotalAlloc,
-                Free:  mem.Frees,
-            },
-            StartTime: h.startTime.Unix(),
+    health := AppHealthDetails{
+        Timestamp: now.UTC().Format(time.RFC3339),
+        Uptime:    now.Sub(h.startTime).Seconds(),
+        MemoryUsage: MemoryUsage{
+            Total: mem.TotalAlloc,
+            Free:  mem.Frees,
         },
-        Db: DbHealthDetails{
-            Timestamp: now.UTC().Format(time.RFC3339),
-        },
+        StartTime: h.startTime.Unix(),
     }
 
-    // Check database connection
+    c.JSON(http.StatusOK, health)
+}
+
+func (h *HealthHandler) DbStatus(c *gin.Context) {
+    now := time.Now()
+    health := DbHealthDetails{
+        Timestamp: now.UTC().Format(time.RFC3339),
+    }
+
     start := time.Now()
     if sqlDB, err := h.db.DB(); err != nil {
-        health.Db.DatabaseStatus = "error"
-        health.Db.Error = "Database connection error: " + err.Error()
+        health.DatabaseStatus = "error"
+        health.Error = "Database connection error: " + err.Error()
         c.JSON(http.StatusServiceUnavailable, health)
         return
     } else if err := sqlDB.Ping(); err != nil {
-        health.Db.DatabaseStatus = "error"
-        health.Db.Error = "Database ping failed: " + err.Error()
+        health.DatabaseStatus = "error"
+        health.Error = "Database ping failed: " + err.Error()
         c.JSON(http.StatusServiceUnavailable, health)
         return
     }
 
-    health.Db.ConnectionTime = time.Since(start).Seconds()
-    health.Db.DatabaseStatus = "healthy"
+    health.ConnectionTime = time.Since(start).Seconds()
+    health.DatabaseStatus = "healthy"
 
     c.JSON(http.StatusOK, health)
 }
