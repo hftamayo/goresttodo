@@ -3,7 +3,7 @@ package task
 import "github.com/hftamayo/gotodo/api/v1/models"
 
 type TaskServiceInterface interface {
-    List() ([]*models.Task, error)
+    List(page, pageSize int) ([]*models.Task, error)
     ListById(id int) (*models.Task, error)
     Create(task *models.Task) error
     Update(task *models.Task) error
