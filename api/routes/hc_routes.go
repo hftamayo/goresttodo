@@ -8,7 +8,7 @@ import (
 func SetupHealthCheckRoutes(app *gin.Engine, handler *health.HealthHandler) {
 	const hcPath = "/tasks/healthcheck"
 
-	app.GET(hcPath, handler.AppStatus)
-	app.GET(hcPath, handler.DbStatus)
+	app.GET(hcPath+"/app", handler.AppStatus)
+	app.GET(hcPath+"/db", handler.DbStatus)
 
 }
