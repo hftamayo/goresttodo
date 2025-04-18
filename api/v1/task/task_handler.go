@@ -45,7 +45,14 @@ func (h *Handler) List(c *gin.Context) {
 	repo := NewTaskRepositoryImpl(db)
 
 	service := NewTaskService(repo, h.cache)
-	tasks, err := service.List()
+
+    limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+    skip, _ := strconv.Atoi(c.DefaultQuery("skip", "0"))
+    
+    // Calculate page number from skip and limit
+    page := (skip / limit) + 1	
+
+	tasks, err := service.List(page, limit)
 	if err != nil {
 		h.ErrorLogService.LogError("Task_list", err)
 
