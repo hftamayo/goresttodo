@@ -2,6 +2,7 @@ package task
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -20,9 +21,9 @@ func NewTaskService(repo TaskRepository, cache *utils.Cache) *TaskService {
 	return &TaskService{repo: repo, cache: cache}
 }
 
-func (s *TaskService) List() ([]*models.Task, error) {
+func (s *TaskService) List(page, pageSize int) ([]*models.Task, error) {
 	var tasks []*models.Task
-	cacheKey := "tasks_list"
+    cacheKey := fmt.Sprintf("tasks_list_page_%d_size_%d", page, pageSize)
 
 	// Try to get tasks from cache
 	err := s.cache.Get(cacheKey, &tasks)
