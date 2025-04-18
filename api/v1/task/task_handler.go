@@ -65,7 +65,13 @@ func (h *Handler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"code":          http.StatusOK,
 		"resultMessage": utils.OperationSuccess,
-		"tasks":         tasks,
+        "data": gin.H{
+            "tasks": tasks,
+            "pagination": gin.H{
+                "limit": limit,
+                "skip":  skip,
+			},
+		},
 	})
 }
 
