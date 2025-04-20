@@ -62,11 +62,17 @@ func (h *Handler) List(c *gin.Context) {
 		})
 		return
 	}
+
+    taskResponses := make([]*TaskResponse, len(tasks))
+    for i, task := range tasks {
+        taskResponses[i] = ToTaskResponse(task)
+    }	
+
 	c.JSON(http.StatusOK, gin.H{
 		"code":          http.StatusOK,
 		"resultMessage": utils.OperationSuccess,
         "data": gin.H{
-            "tasks": tasks,
+            "tasks": taskResponses,
             "pagination": gin.H{
                 "limit": limit,
                 "skip":  skip,
