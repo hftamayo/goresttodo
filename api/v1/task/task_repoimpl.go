@@ -14,10 +14,18 @@ type TaskRepositoryImpl struct {
 func (r *TaskRepositoryImpl) List(page, pageSize int) ([]*models.Task, error) {
 	var tasks []*models.Task
 	offset := (page - 1) * pageSize
-	if result := r.Db.Offset(offset).Limit(pageSize).Find(&tasks); result.Error != nil {
-		return nil, result.Error
-	}
-	return tasks, nil
+
+    result := r.Db.
+        Order("created_at DESC").
+        Offset(offset).
+        Limit(pageSize).
+        Find(&tasks)
+
+    if result.Error != nil {
+        return nil, result.Error
+    }
+
+    return tasks, nil
 }
 
 func (r *TaskRepositoryImpl) ListById(id int) (*models.Task, error) {
