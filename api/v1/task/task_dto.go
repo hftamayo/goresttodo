@@ -4,6 +4,21 @@ import (
 	"github.com/hftamayo/gotodo/api/v1/models"
 )
 
+type CreateTaskRequest struct {
+    Title       string `json:"title" binding:"required"`
+    Description string `json:"description" binding:"required"`
+    Owner       uint   `json:"owner" binding:"required"`
+}
+
+type UpdateTaskRequest struct {
+    Title       string `json:"title" binding:"required"`
+    Description string `json:"description" binding:"required"`
+}
+
+type DoneTaskRequest struct {
+    Done bool `json:"done" binding:"required"`
+}
+
 type PaginationQuery struct {
     Page     int `form:"page" binding:"required,min=1"`
     PageSize int `form:"limit" binding:"required,min=1,max=100"`
