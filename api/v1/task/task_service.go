@@ -1,9 +1,7 @@
 package task
 
 import (
-	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/hftamayo/gotodo/api/v1/models"
@@ -17,7 +15,7 @@ type TaskService struct {
 	cache *utils.Cache
 }
 
-func NewTaskService(repo TaskRepository, cache *utils.Cache) *TaskService {
+func NewTaskService(repo TaskRepository, cache *utils.Cache) TaskServiceInterface {
 	return &TaskService{repo: repo, cache: cache}
 }
 
@@ -26,82 +24,106 @@ func (s *TaskService) List(page, pageSize int) ([]*models.Task, error) {
     cacheKey := fmt.Sprintf("tasks_list_page_%d_size_%d", page, pageSize)
 
 	// Try to get tasks from cache
-	err := s.cache.Get(cacheKey, &tasks)
-	if err == nil {
-		return tasks, nil
-	}
+    if err := s.cache.Get(cacheKey, &tasks); err == nil {
+        return tasks, nil
+    }
 
-	// If cache miss, get tasks from repository
-	tasks, err = s.repo.List(1, 10)
-	if err != nil {
-		return nil, err
-	}
+    tasks, err := s.repo.List(page, pageSize)
+    if err != nil {
+        return nil, fmt.Errorf("failed to list tasks: %w", err)
+    }
 
-	// Cache the tasks
-	s.cache.Set(cacheKey, tasks, 10*time.Minute)
-
-	return tasks, nil
+    s.cache.Set(cacheKey, tasks, 10*time.Minute)
+    return tasks, nil
 }
 
 func (s *TaskService) ListById(id int) (*models.Task, error) {
 	var task *models.Task
-	cacheKey := "task_" + strconv.Itoa(id)
+    cacheKey := fmt.Sprintf("task_%d", id)
 
-	// Try to get task from cache
-	err := s.cache.Get(cacheKey, &task)
-	if err == nil {
-		return task, nil
-	}
+    if err := s.cache.Get(cacheKey, &task); err == nil {
+        return task, nil
+    }
 
-	// If cache miss, get task from repository
-	task, err = s.repo.ListById(id)
-	if err != nil {
-		return nil, err
-	}
+    task, err := s.repo.ListById(id)
+    if err != nil {
+        return nil, fmt.Errorf("failed to get task by id: %w", err)
+    }
 
-	// Cache the task
-	s.cache.Set(cacheKey, task, 10*time.Minute)
+    if task == nil {
+        return nil, fmt.Errorf("task with id %d not found", id)
+    }
 
-	return task, nil
+    s.cache.Set(cacheKey, task, 10*time.Minute)
+    return task, nil
 }
 
 func (s *TaskService) Create(task *models.Task) error {
-	return s.repo.Create(task)
+    if task == nil {
+        return fmt.Errorf("invalid task data")
+    }
+
+    if err := s.repo.Create(task); err != nil {
+        return fmt.Errorf("failed to create task: %w", err)
+    }
+
+    // Invalidate list cache
+    s.cache.Delete("tasks_list*")
+    return nil
 }
 
 func (s *TaskService) Update(task *models.Task) error {
-	existingTask, err := s.repo.ListById(int(task.ID))
-	if err != nil {
-		return err
-	}
+    if task == nil {
+        return ErrInvalidTask
+    }
 
-	if existingTask == nil {
-		return errors.New("Todo not found")
-	}
+    existingTask, err := s.repo.ListById(int(task.ID))
+    if err != nil {
+        return fmt.Errorf("failed to verify task existence: %w", err)
+    }
 
-	return s.repo.Update(task)
+    if existingTask == nil {
+        return fmt.Errorf("task with id %d not found", task.ID)
+    }
+
+    if err := s.repo.Update(task); err != nil {
+        return fmt.Errorf("failed to update task: %w", err)
+    }
+
+    // Invalidate caches
+    s.cache.Delete(fmt.Sprintf("task_%d", task.ID))
+    s.cache.Delete("tasks_list*")
+    return nil
 }
 
 func (s *TaskService) Done(id int, done bool) (*models.Task, error) {
-	existingTask, err := s.repo.ListById(id)
-	if err != nil {
-		return nil, err
-	}
+    existingTask, err := s.repo.ListById(id)
+    if err != nil {
+        return nil, fmt.Errorf("failed to get task: %w", err)
+    }
 
-	if existingTask == nil {
-		return nil, errors.New("Todo not found")
-	}
+    if existingTask == nil {
+        return nil, fmt.Errorf("task with id %d not found", id)
+    }
 
-	existingTask.Done = done
+    existingTask.Done = done
+    if err := s.repo.Update(existingTask); err != nil {
+        return nil, fmt.Errorf("failed to update task status: %w", err)
+    }
 
-	// Save the updated in the database.
-	err = s.repo.Update(existingTask)
-	if err != nil {
-		return nil, err
-	}
-	return existingTask, nil
+    // Invalidate caches
+    s.cache.Delete(fmt.Sprintf("task_%d", id))
+    s.cache.Delete("tasks_list*")
+    return existingTask, nil
 }
 
 func (s *TaskService) Delete(id int) error {
-	return s.repo.Delete(id)
+    if err := s.repo.Delete(id); err != nil {
+        return fmt.Errorf("failed to delete task: %w", err)
+    }
+
+    // Invalidate caches
+    s.cache.Delete(fmt.Sprintf("task_%d", id))
+    s.cache.Delete("tasks_list*")
+    return nil
 }
