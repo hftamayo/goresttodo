@@ -8,178 +8,55 @@ import (
 	"github.com/hftamayo/gotodo/api/v1/errorlog"
 	"github.com/hftamayo/gotodo/api/v1/models"
 	"github.com/hftamayo/gotodo/pkg/utils"
-	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
 
+const (
+    ErrInvalidID = "Invalid ID parameter"
+    ErrTaskNotFound = "Task not found"
+    ErrInvalidRequest = "Invalid request body"
+    ErrInvalidPaginationParams = "Invalid pagination parameters"
+)
+
 type Handler struct {
-	Db              *gorm.DB
-	Service         TaskServiceInterface
-	ErrorLogService *errorlog.ErrorLogService
+	service         TaskServiceInterface
+	errorLogService *errorlog.ErrorLogService
 	cache 		 	*utils.Cache
-	redisClient 	*redis.Client
 }
 
-func NewHandler(db *gorm.DB, service TaskServiceInterface, errorLogService *errorlog.ErrorLogService) *Handler {
-	redisClient := redis.NewClient(&redis.Options{
-        Addr:     "localhost:6379", // Redis server address
-        Password: "",               // no password set
-        DB:       0,                // use default DB
-    })	
+func NewHandler(service TaskServiceInterface, errorLogService *errorlog.ErrorLogService, cache *utils.Cache) *Handler {
+    if service == nil {
+        panic("task service is required")
+    }
+    if errorLogService == nil {
+        panic("error log service is required")
+    }
+    if cache == nil {
+        panic("cache is required")
+    }
 
 	return &Handler{
-		Db:              db,
-		Service:         service,
-		ErrorLogService: errorLogService,
-		cache:           utils.NewCache(redisClient),
-		redisClient:     redisClient,
+        service:         service,
+        errorLogService: errorLogService,
+        cache:          cache,
 	}
-}
-
-func NewTaskRepositoryImpl(db *gorm.DB) *TaskRepositoryImpl {
-	return &TaskRepositoryImpl{Db: db}
 }
 
 func (h *Handler) List(c *gin.Context) {
-	db := h.Db
-	repo := NewTaskRepositoryImpl(db)
-
-	service := NewTaskService(repo, h.cache)
-
-    limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
-    skip, _ := strconv.Atoi(c.DefaultQuery("skip", "0"))
-    
-    // Calculate page number from skip and limit
-    page := (skip / limit) + 1	
-
-	tasks, err := service.List(page, limit)
-	if err != nil {
-		h.ErrorLogService.LogError("Task_list", err)
-
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code":          http.StatusBadRequest,
-			"resultMessage": utils.OperationFailed,
-		})
-		return
-	}
-
-    taskResponses := make([]*TaskResponse, len(tasks))
-    for i, task := range tasks {
-        taskResponses[i] = ToTaskResponse(task)
-    }	
-
-	c.JSON(http.StatusOK, gin.H{
-		"code":          http.StatusOK,
-		"resultMessage": utils.OperationSuccess,
-        "data": gin.H{
-            "tasks": taskResponses,
-            "pagination": gin.H{
-                "limit": limit,
-                "skip":  skip,
-			},
-		},
-	})
-}
-
-func (h *Handler) ListById(c *gin.Context) {
-	db := h.Db
-	repo := NewTaskRepositoryImpl(db)
-	service := NewTaskService(repo, h.cache)
-
-	// Parse the ID from the URL parameter.
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		h.ErrorLogService.LogError("Task_list_by_id", err)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code":          http.StatusBadRequest,
-			"resultMessage": utils.OperationFailed,
-		})
-		return
-	}
-	task, err := service.ListById(id)
-	if err != nil {
-		h.ErrorLogService.LogError("Task_list_by_id", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":          http.StatusInternalServerError,
-			"resultMessage": utils.OperationFailed,
-		})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{
-		"code":          http.StatusOK,
-		"resultMessage": utils.OperationSuccess,
-		"task":          task,
-	})
-}
-
-func (h *Handler) Create(c *gin.Context) {
-	db := h.Db
-	repo := NewTaskRepositoryImpl(db)
-	service := NewTaskService(repo, h.cache)
-	task := &models.Task{}
-
-	if err := c.ShouldBindJSON(task); err != nil {
-		h.ErrorLogService.LogError("Task_create", err)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code":          http.StatusBadRequest,
-			"resultMessage": utils.OperationFailed,
-		})
-		return
-	}
-	err := service.Create(task)
-	if err != nil {
-		h.ErrorLogService.LogError("Task_create", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":          http.StatusInternalServerError,
-			"resultMessage": utils.OperationFailed,
-		})
-		return
-	}
-	c.JSON(http.StatusCreated, gin.H{
-		"code":          http.StatusCreated,
-		"resultMessage": utils.OperationSuccess,
-		"task":          task,
-	})
-}
-
-func (h *Handler) Update(c *gin.Context) {
-    id, err := strconv.Atoi(c.Param("id"))
-    if err != nil {
+    var query PaginationQuery
+    if err := c.ShouldBindQuery(&query); err != nil {
+        h.errorLogService.LogError("Task_list_validation", err)
         c.JSON(http.StatusBadRequest, gin.H{
             "code":          http.StatusBadRequest,
             "resultMessage": utils.OperationFailed,
-            "error":        "Invalid ID",
+            "error":        ErrInvalidPaginationParams,
         })
         return
     }
 
-    existingTask, err := h.Service.ListById(id)
+    tasks, err := h.service.List(query.Page, query.PageSize)
     if err != nil {
-        h.ErrorLogService.LogError("Task_update_fetch", err)
-        c.JSON(http.StatusNotFound, gin.H{
-            "code":          http.StatusNotFound,
-            "resultMessage": utils.OperationFailed,
-            "error":        "Task not found",
-        })
-        return
-    }
-
-    updatedTask := &models.Task{}
-    if err := c.ShouldBindJSON(updatedTask); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{
-            "code":          http.StatusBadRequest,
-            "resultMessage": utils.OperationFailed,
-            "error":        "Invalid request body",
-        })
-        return
-    }
-
-    updatedTask.ID = uint(id)
-    updatedTask.Owner = existingTask.Owner
-
-    err = h.Service.Update(updatedTask)
-    if err != nil {
-        h.ErrorLogService.LogError("Task_update", err)
+        h.errorLogService.LogError("Task_list", err)
         c.JSON(http.StatusInternalServerError, gin.H{
             "code":          http.StatusInternalServerError,
             "resultMessage": utils.OperationFailed,
@@ -190,92 +67,197 @@ func (h *Handler) Update(c *gin.Context) {
     c.JSON(http.StatusOK, gin.H{
         "code":          http.StatusOK,
         "resultMessage": utils.OperationSuccess,
-        "task":         updatedTask,
+        "data": gin.H{
+            "tasks": TasksToResponse(tasks),
+            "pagination": gin.H{
+                "page":     query.Page,
+                "pageSize": query.PageSize,
+            },
+        },
+    })
+}
+
+
+func (h *Handler) ListById(c *gin.Context) {
+	// Parse the ID from the URL parameter.
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		h.errorLogService.LogError("Task_list_by_id", err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":          http.StatusBadRequest,
+			"resultMessage": utils.OperationFailed,
+			"error":        ErrInvalidID,
+		})
+		return
+	}
+	task, err := h.service.ListById(id)
+	if err != nil {
+		h.errorLogService.LogError("Task_list_by_id", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":          http.StatusInternalServerError,
+			"resultMessage": utils.OperationFailed,
+		})
+		return
+	}
+
+    if task == nil {
+        c.JSON(http.StatusNotFound, gin.H{
+            "code":          http.StatusNotFound,
+            "resultMessage": utils.OperationFailed,
+            "error":        ErrTaskNotFound,
+        })
+        return
+    }
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":          http.StatusOK,
+		"resultMessage": utils.OperationSuccess,
+		"task":         ToTaskResponse(task),
+	})
+}
+
+func (h *Handler) Create(c *gin.Context) {
+	var createRequest CreateTaskRequest
+	if err := c.ShouldBindJSON(&createRequest); err != nil {
+		h.errorLogService.LogError("Task_create", err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":          http.StatusBadRequest,
+			"resultMessage": utils.OperationFailed,
+			"error":        ErrInvalidRequest,
+		})
+		return
+	}
+    task := &models.Task{
+        Title:       createRequest.Title,
+        Description: createRequest.Description,
+        Owner:       createRequest.Owner,
+    }
+
+    if err := h.service.Create(task); err != nil {
+        h.errorLogService.LogError("Task_create", err)
+        c.JSON(http.StatusInternalServerError, gin.H{
+            "code":          http.StatusInternalServerError,
+            "resultMessage": utils.OperationFailed,
+        })
+        return
+    }
+
+    c.JSON(http.StatusCreated, gin.H{
+        "code":          http.StatusCreated,
+        "resultMessage": utils.OperationSuccess,
+        "task":         ToTaskResponse(task),
+    })
+}
+
+func (h *Handler) Update(c *gin.Context) {
+    id, err := strconv.Atoi(c.Param("id"))
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{
+            "code":          http.StatusBadRequest,
+            "resultMessage": utils.OperationFailed,
+            "error":        ErrInvalidID,
+        })
+        return
+    }
+
+    var updateRequest UpdateTaskRequest
+    if err := c.ShouldBindJSON(&updateRequest); err != nil {
+		h.errorLogService.LogError("Task_update_binding", err)
+        c.JSON(http.StatusBadRequest, gin.H{
+            "code":          http.StatusBadRequest,
+            "resultMessage": utils.OperationFailed,
+            "error":        "Invalid request body",
+        })
+        return
+    }
+
+    task := &models.Task{
+        Model:       gorm.Model{ID: uint(id)},
+        Title:       updateRequest.Title,
+        Description: updateRequest.Description,
+    }	
+
+    if err := h.service.Update(task); err != nil {
+        h.errorLogService.LogError("Task_update", err)
+        c.JSON(http.StatusInternalServerError, gin.H{
+            "code":          http.StatusInternalServerError,
+            "resultMessage": utils.OperationFailed,
+        })
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{
+        "code":          http.StatusOK,
+        "resultMessage": utils.OperationSuccess,
+        "task":         ToTaskResponse(task),
     })
 }
 
 func (h *Handler) Done(c *gin.Context) {
-	db := h.Db
-	repo := NewTaskRepositoryImpl(db)
-	service := NewTaskService(repo, h.cache)
-
 	// Parse the ID from the URL parameter.
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		h.ErrorLogService.LogError("Task_done", err)
+		h.errorLogService.LogError("Task_done", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":          http.StatusBadRequest,
 			"resultMessage": utils.OperationFailed,
+			"error":        ErrInvalidID,
 		})
 		return
 	}
 
-	var body map[string]bool
-	if err := c.ShouldBindJSON(&body); err != nil {
-		h.ErrorLogService.LogError("Task_done", err)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code":          http.StatusBadRequest,
-			"resultMessage": utils.OperationFailed,
-		})
-		return
-	}
-	done, ok := body["done"]
-	if !ok {
-		h.ErrorLogService.LogError("Task_done", err)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code":          http.StatusBadRequest,
-			"resultMessage": utils.OperationFailed,
-		})
-	}
-	task := &models.Task{
-		Model: gorm.Model{ID: uint(id)},
-		Done:  done,
-	}
+    var doneRequest DoneTaskRequest
+    if err := c.ShouldBindJSON(&doneRequest); err != nil {
+        h.errorLogService.LogError("Task_done_binding", err)
+        c.JSON(http.StatusBadRequest, gin.H{
+            "code":          http.StatusBadRequest,
+            "resultMessage": utils.OperationFailed,
+            "error":        ErrInvalidRequest,
+        })
+        return
+    }
 
-	task, err = service.Done(int(task.ID), done) // Pass the ID of the todo instead of the todo itself.
-	if err != nil {
-		h.ErrorLogService.LogError("Task_done", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":          http.StatusInternalServerError,
-			"resultMessage": utils.OperationFailed,
-		})
-		return
-	}
+    task, err := h.service.Done(id, doneRequest.Done)
+    if err != nil {
+        h.errorLogService.LogError("Task_done", err)
+        c.JSON(http.StatusInternalServerError, gin.H{
+            "code":          http.StatusInternalServerError,
+            "resultMessage": utils.OperationFailed,
+        })
+        return
+    }
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":          http.StatusOK,
-		"resultMessage": utils.OperationSuccess,
-		"task":          task,
-	})
+    c.JSON(http.StatusOK, gin.H{
+        "code":          http.StatusOK,
+        "resultMessage": utils.OperationSuccess,
+        "task":         ToTaskResponse(task),
+    })
 }
 
 func (h *Handler) Delete(c *gin.Context) {
-	db := h.Db
-	repo := NewTaskRepositoryImpl(db)
-	service := NewTaskService(repo, h.cache)
-
 	// Parse the ID from the URL parameter.
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		h.ErrorLogService.LogError("Task_delete", err)
+		h.errorLogService.LogError("Task_delete", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":          http.StatusBadRequest,
 			"resultMessage": utils.OperationFailed,
+			"error":        ErrInvalidID,
 		})
 		return
 	}
 
-	err = service.Delete(id)
-	if err != nil {
-		h.ErrorLogService.LogError("Task_delete", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":          http.StatusInternalServerError,
-			"resultMessage": utils.OperationFailed,
-		})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{
-		"code":          http.StatusOK,
-		"resultMessage": utils.OperationSuccess,
-	})
+    if err := h.service.Delete(id); err != nil {
+        h.errorLogService.LogError("Task_delete", err)
+        c.JSON(http.StatusInternalServerError, gin.H{
+            "code":          http.StatusInternalServerError,
+            "resultMessage": utils.OperationFailed,
+        })
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{
+        "code":          http.StatusOK,
+        "resultMessage": utils.OperationSuccess,
+    })
 }
