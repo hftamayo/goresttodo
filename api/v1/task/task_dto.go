@@ -1,5 +1,9 @@
 package task
 
+import (
+	"github.com/hftamayo/gotodo/api/v1/models"
+)
+
 type PaginationQuery struct {
     Page     int `form:"page" binding:"required,min=1"`
     PageSize int `form:"limit" binding:"required,min=1,max=100"`
@@ -21,4 +25,14 @@ type TaskResponse struct {
     Description string `json:"description"`
     Done        bool   `json:"done"`
     Owner       uint   `json:"owner"`
+}
+
+func ToTaskResponse(task *models.Task) *TaskResponse {
+    return &TaskResponse{
+        ID:          task.ID,
+        Title:       task.Title,
+        Description: task.Description,
+        Done:        task.Done,
+        Owner:       task.Owner,
+    }
 }
