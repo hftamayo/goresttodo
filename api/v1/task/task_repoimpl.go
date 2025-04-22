@@ -12,7 +12,7 @@ type TaskRepositoryImpl struct {
 	db *gorm.DB
 }
 
-func NewTaskRepository(db *gorm.DB) TaskRepository {
+func NewTaskRepositoryImpl(db *gorm.DB) TaskRepository {
 	if db == nil {
 		fmt.Errorf("database connection is required")
 		return nil
