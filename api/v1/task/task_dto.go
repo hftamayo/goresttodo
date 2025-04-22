@@ -19,19 +19,20 @@ type DoneTaskRequest struct {
     Done bool `json:"done" binding:"required"`
 }
 
-type PaginationQuery struct {
-    Page     int `form:"page" binding:"required,min=1"`
-    PageSize int `form:"limit" binding:"required,min=1,max=100"`
+type CursorPaginationQuery struct {
+    Limit  int    `form:"limit" binding:"required,min=1,max=100"`
+    Cursor string `form:"cursor"`
 }
 
-type PaginationMeta struct {
-    Page     int `json:"page"`
-    PageSize int `json:"pageSize"`
+type CursorPaginationMeta struct {
+    NextCursor string `json:"nextCursor,omitempty"`
+    HasMore    bool   `json:"hasMore"`
+    Count      int    `json:"count"`
 }
 
 type TaskListResponse struct {
     Tasks      []*TaskResponse `json:"tasks"`
-    Pagination PaginationMeta  `json:"pagination"`
+    Pagination CursorPaginationMeta  `json:"pagination"`
 }
 
 type TaskResponse struct {
