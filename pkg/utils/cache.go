@@ -33,3 +33,8 @@ func (c *Cache) Get(key string, dest interface{}) error {
 	}
 	return json.Unmarshal([]byte(data), dest)
 }
+
+func (c *Cache) Delete(key string) error {
+	ctx := context.Background()
+	return c.RedisClient.Del(ctx, key).Err()
+}
