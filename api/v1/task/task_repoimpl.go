@@ -1,14 +1,11 @@
 package task
 
 import (
-	"encoding/base64"
 	"errors"
 	"fmt"
-	"strconv"
-	"strings"
-	"time"
 
 	"github.com/hftamayo/gotodo/api/v1/models"
+	"github.com/hftamayo/gotodo/pkg/cursor"
 	"gorm.io/gorm"
 )
 
@@ -29,11 +26,6 @@ const (
     maxLimit    = 100
 )
 
-type cursor struct {
-    ID uint `json:"id"`
-    CreatedAt time.Time `json:"created_at"`
-}
-
 
 func (r *TaskRepositoryImpl) List(limit int, cursorStr string) ([]*models.Task, string, error) {
     if limit <= 0 {
@@ -47,12 +39,12 @@ func (r *TaskRepositoryImpl) List(limit int, cursorStr string) ([]*models.Task, 
 
     // If cursor is provided, decode and apply conditions
     if cursorStr != "" {
-        c, err := decodeCursor(cursorStr)
+        c, err := cursor.Decode[uint](cursorStr)
         if err != nil {
             return nil, "", fmt.Errorf("invalid cursor: %w", err)
         }
         
-        query = query.Where("(created_at, id) < (?, ?)", c.CreatedAt, c.ID)
+        query = query.Where("(created_at, id) < (?, ?)", c.Timestamp, c.ID)
     }
 
     var tasks []*models.Task
@@ -66,48 +58,18 @@ func (r *TaskRepositoryImpl) List(limit int, cursorStr string) ([]*models.Task, 
     // If we have more items than limit, create next cursor
     if hasMore {
         lastTask := tasks[len(tasks)-1]
-        nextCursor = encodeCursor(cursor{
+        c := cursor.Cursor[uint]{
             ID:        lastTask.ID,
-            CreatedAt: lastTask.CreatedAt,
+            Timestamp: lastTask.CreatedAt,
+        }
+        nextCursor, _ = cursor.Encode(c, cursor.Options{
+            Field:     "created_at",
+            Direction: "DESC",
         })
         tasks = tasks[:limit] // Remove the extra item
     }
 
     return tasks, nextCursor, nil
-}
-
-// Helper function to encode cursor
-func encodeCursor(c cursor) string {
-    str := fmt.Sprintf("%d:%d", c.ID, c.CreatedAt.Unix())
-    return base64.StdEncoding.EncodeToString([]byte(str))
-}
-
-// Helper function to decode cursor
-func decodeCursor(str string) (cursor, error) {
-    bytes, err := base64.StdEncoding.DecodeString(str)
-    if err != nil {
-        return cursor{}, fmt.Errorf("failed to decode cursor: %w", err)
-    }
-
-    parts := strings.Split(string(bytes), ":")
-    if len(parts) != 2 {
-        return cursor{}, fmt.Errorf("invalid cursor format")
-    }
-
-    id, err := strconv.ParseUint(parts[0], 10, 32)
-    if err != nil {
-        return cursor{}, fmt.Errorf("invalid cursor ID: %w", err)
-    }
-
-    timestamp, err := strconv.ParseInt(parts[1], 10, 64)
-    if err != nil {
-        return cursor{}, fmt.Errorf("invalid cursor timestamp: %w", err)
-    }
-
-    return cursor{
-        ID:        uint(id),
-        CreatedAt: time.Unix(timestamp, 0),
-    }, nil
 }
 
 func (r *TaskRepositoryImpl) ListById(id int) (*models.Task, error) {
