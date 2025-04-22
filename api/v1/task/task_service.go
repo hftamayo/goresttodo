@@ -74,7 +74,7 @@ func (s *TaskService) Create(task *models.Task) error {
 
 func (s *TaskService) Update(task *models.Task) error {
     if task == nil {
-        return ErrInvalidTask
+        return fmt.Errorf("invalid task data")
     }
 
     existingTask, err := s.repo.ListById(int(task.ID))
