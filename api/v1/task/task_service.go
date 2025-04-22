@@ -8,6 +8,13 @@ import (
 	"github.com/hftamayo/gotodo/pkg/utils"
 )
 
+const (
+    defaultCacheTime = 10 * time.Minute
+    serviceDefaultLimit     = 10
+    serviceMaxLimit        = 100
+)
+
+
 var _ TaskServiceInterface = (*TaskService)(nil)
 
 type TaskService struct {
@@ -19,22 +26,49 @@ func NewTaskService(repo TaskRepository, cache *utils.Cache) TaskServiceInterfac
 	return &TaskService{repo: repo, cache: cache}
 }
 
-func (s *TaskService) List(page, pageSize int) ([]*models.Task, error) {
-	var tasks []*models.Task
-    cacheKey := fmt.Sprintf("tasks_list_page_%d_size_%d", page, pageSize)
-
-	// Try to get tasks from cache
-    if err := s.cache.Get(cacheKey, &tasks); err == nil {
-        return tasks, nil
+func (s *TaskService) List(limit int, cursorStr string) ([]*models.Task, *CursorPaginationMeta, error) {
+    if limit <= 0 {
+        limit = defaultLimit
+    }
+    if limit > maxLimit {
+        limit = maxLimit
     }
 
-    tasks, err := s.repo.List(page, pageSize)
+    // Try to get from cache first
+    cacheKey := fmt.Sprintf("tasks_cursor_%s_limit_%d", cursorStr, limit)
+    var cachedResult struct {
+        Tasks    []*models.Task
+        Metadata *CursorPaginationMeta
+    }
+
+    if err := s.cache.Get(cacheKey, &cachedResult); err == nil {
+        return cachedResult.Tasks, cachedResult.Metadata, nil
+    }
+
+    // Get from repository
+    tasks, nextCursor, err := s.repo.List(limit, cursorStr)
     if err != nil {
-        return nil, fmt.Errorf("failed to list tasks: %w", err)
+        return nil, nil, fmt.Errorf("failed to list tasks: %w", err)
     }
 
-    s.cache.Set(cacheKey, tasks, 10*time.Minute)
-    return tasks, nil
+    // Build pagination metadata
+    metadata := &CursorPaginationMeta{
+        HasMore:    nextCursor != "",
+        NextCursor: nextCursor,
+        Count:      len(tasks),
+    }
+
+    // Cache the result
+    result := struct {
+        Tasks    []*models.Task
+        Metadata *CursorPaginationMeta
+    }{
+        Tasks:    tasks,
+        Metadata: metadata,
+    }
+    s.cache.Set(cacheKey, result, defaultCacheTime)
+
+    return tasks, metadata, nil
 }
 
 func (s *TaskService) ListById(id int) (*models.Task, error) {
