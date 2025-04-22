@@ -36,3 +36,11 @@ func ToTaskResponse(task *models.Task) *TaskResponse {
         Owner:       task.Owner,
     }
 }
+
+func TasksToResponse(tasks []*models.Task) []*TaskResponse {
+    taskResponses := make([]*TaskResponse, len(tasks))
+    for i, task := range tasks {
+        taskResponses[i] = ToTaskResponse(task)
+    }
+    return taskResponses
+}
