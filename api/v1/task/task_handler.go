@@ -43,7 +43,7 @@ func NewHandler(service TaskServiceInterface, errorLogService *errorlog.ErrorLog
 }
 
 func (h *Handler) List(c *gin.Context) {
-    var query PaginationQuery
+    var query CursorPaginationQuery
     if err := c.ShouldBindQuery(&query); err != nil {
         h.errorLogService.LogError("Task_list_validation", err)
         c.JSON(http.StatusBadRequest, gin.H{
@@ -54,7 +54,14 @@ func (h *Handler) List(c *gin.Context) {
         return
     }
 
-    tasks, err := h.service.List(query.Page, query.PageSize)
+    if query.Limit <= 0 {
+        query.Limit = defaultLimit
+    }
+    if query.Limit > maxLimit {
+        query.Limit = maxLimit
+    }    
+
+    tasks, nextCursor, err := h.service.List(query.Cursor, query.Limit)
     if err != nil {
         h.errorLogService.LogError("Task_list", err)
         c.JSON(http.StatusInternalServerError, gin.H{
@@ -67,11 +74,11 @@ func (h *Handler) List(c *gin.Context) {
     c.JSON(http.StatusOK, gin.H{
         "code":          http.StatusOK,
         "resultMessage": utils.OperationSuccess,
-        "data": gin.H{
+        "tasks": gin.H{
             "tasks": TasksToResponse(tasks),
             "pagination": gin.H{
-                "page":     query.Page,
-                "pageSize": query.PageSize,
+                "nextCursor":     nextCursor,
+                "limit": query.Limit,
             },
         },
     })
