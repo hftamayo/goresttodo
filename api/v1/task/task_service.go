@@ -25,28 +25,36 @@ var _ TaskServiceInterface = (*TaskService)(nil)
 var cachedData struct {
     Tasks      []*models.Task        `json:"tasks"`
     Pagination CursorPaginationMeta  `json:"pagination"`
+    TotalCount int64          `json:"totalCount"`
 }
 
 func NewTaskService(repo TaskRepository, cache *utils.Cache) TaskServiceInterface {
 	return &TaskService{repo: repo, cache: cache}
 }
 
-func (s *TaskService) List(cursor string, limit int) ([]*models.Task, string, error) {
+func (s *TaskService) List(cursor string, limit int) ([]*models.Task, string, int64, error) {
     // Try to get from cache first
     cacheKey := fmt.Sprintf("tasks_cursor_%s_limit_%d", cursor, limit)
     if err := s.cache.Get(cacheKey, &cachedData); err == nil {
-        return cachedData.Tasks, cachedData.Pagination.NextCursor, nil
+        return cachedData.Tasks, cachedData.Pagination.NextCursor, cachedData.TotalCount, nil
     }
 
     // Get from repository
     tasks, nextCursor, err := s.repo.List(limit, cursor)
     if err != nil {
-        return nil, "", fmt.Errorf("failed to list tasks: %w", err)
+        return nil, "", 0, fmt.Errorf("failed to list tasks: %w", err)
+    }
+
+    // Get total count
+    totalCount, err := s.repo.GetTotalCount()
+    if err != nil {
+        return nil, "", 0, fmt.Errorf("failed to get total count: %w", err)
     }
 
     cacheData := struct {
         Tasks      []*models.Task       `json:"tasks"`
         Pagination CursorPaginationMeta `json:"pagination"`
+        TotalCount int64               `json:"totalCount"`
     }{
         Tasks: tasks,
         Pagination: CursorPaginationMeta{
@@ -54,13 +62,14 @@ func (s *TaskService) List(cursor string, limit int) ([]*models.Task, string, er
             HasMore:    nextCursor != "",
             Count:      len(tasks),
         },
+        TotalCount: totalCount,
     }
     
     if cacheBytes, err := json.Marshal(cacheData); err == nil {
         s.cache.Set(cacheKey, string(cacheBytes), defaultCacheTime)
     }
 
-    return tasks, nextCursor, nil
+    return tasks, nextCursor, totalCount, nil
 }
 
 func (s *TaskService) ListById(id int) (*models.Task, error) {
