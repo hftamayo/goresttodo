@@ -5,11 +5,12 @@ import (
 )
 
 type TaskRepository interface {
-	List(page, pageSize int) ([]*models.Task, error)
+	List(limit int, cursor string) ([]*models.Task, string, error)
 	ListById(id int) (*models.Task, error)
 	Create(task *models.Task) error
 	Update(task *models.Task) error
 	Delete(id int) error
+	GetTotalCount() (int64, error)
 }
 
 // Ensure TaskRepositoryImpl implements TaskRepository at compile time

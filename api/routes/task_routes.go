@@ -5,14 +5,21 @@ import (
 	"github.com/hftamayo/gotodo/api/v1/task"
 )
 
-func SetupTaskRoutes(app *gin.Engine, handler *task.Handler) {
-	const todoIDPath = "/gotodo/task/:id"
+const (
+    basePath    = "/tasks/task"
+    taskIDPath  = basePath + "/:id"
+    taskDonePath = taskIDPath + "/done"
+)
 
-	app.GET("/gotodo/task/list", handler.List)
-	app.GET(todoIDPath, handler.ListById)
-	app.POST("/gotodo/task/new", handler.Create)
-	app.PATCH(todoIDPath, handler.Update)
-	app.PATCH(todoIDPath+"/done", handler.Done)
-	app.DELETE(todoIDPath, handler.Delete)
+func SetupTaskRoutes(r *gin.Engine, handler *task.Handler) {
+    taskGroup := r.Group(basePath)
+    {
+        taskGroup.GET("/list", handler.List)
+        taskGroup.GET("/:id", handler.ListById)
+        taskGroup.POST("", handler.Create)
+        taskGroup.PATCH("/:id", handler.Update)
+        taskGroup.PATCH("/:id/done", handler.Done)
+        taskGroup.DELETE("/:id", handler.Delete)
+    }
 
 }

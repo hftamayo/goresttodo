@@ -1,106 +1,164 @@
 package task
 
 import (
-	"errors"
-	"strconv"
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/hftamayo/gotodo/api/v1/models"
 	"github.com/hftamayo/gotodo/pkg/utils"
 )
 
-var _ TaskServiceInterface = (*TaskService)(nil)
+const (
+    defaultCacheTime        = 10 * time.Minute
+    serviceDefaultLimit     = 10
+    serviceMaxLimit         = 100
+)
 
 type TaskService struct {
 	repo  TaskRepository
 	cache *utils.Cache
 }
 
-func NewTaskService(repo TaskRepository, cache *utils.Cache) *TaskService {
+var _ TaskServiceInterface = (*TaskService)(nil)
+
+var cachedData struct {
+    Tasks      []*models.Task        `json:"tasks"`
+    Pagination CursorPaginationMeta  `json:"pagination"`
+    TotalCount int64          `json:"totalCount"`
+}
+
+func NewTaskService(repo TaskRepository, cache *utils.Cache) TaskServiceInterface {
 	return &TaskService{repo: repo, cache: cache}
 }
 
-func (s *TaskService) List() ([]*models.Task, error) {
-	var tasks []*models.Task
-	cacheKey := "tasks_list"
+func (s *TaskService) List(cursor string, limit int) ([]*models.Task, string, int64, error) {
+    // Try to get from cache first
+    cacheKey := fmt.Sprintf("tasks_cursor_%s_limit_%d", cursor, limit)
+    if err := s.cache.Get(cacheKey, &cachedData); err == nil {
+        return cachedData.Tasks, cachedData.Pagination.NextCursor, cachedData.TotalCount, nil
+    }
 
-	// Try to get tasks from cache
-	err := s.cache.Get(cacheKey, &tasks)
-	if err == nil {
-		return tasks, nil
-	}
+    // Get from repository
+    tasks, nextCursor, err := s.repo.List(limit, cursor)
+    if err != nil {
+        return nil, "", 0, fmt.Errorf("failed to list tasks: %w", err)
+    }
 
-	// If cache miss, get tasks from repository
-	tasks, err = s.repo.List(1, 10)
-	if err != nil {
-		return nil, err
-	}
+    // Get total count
+    totalCount, err := s.repo.GetTotalCount()
+    if err != nil {
+        return nil, "", 0, fmt.Errorf("failed to get total count: %w", err)
+    }
 
-	// Cache the tasks
-	s.cache.Set(cacheKey, tasks, 10*time.Minute)
+    cacheData := struct {
+        Tasks      []*models.Task       `json:"tasks"`
+        Pagination CursorPaginationMeta `json:"pagination"`
+        TotalCount int64               `json:"totalCount"`
+    }{
+        Tasks: tasks,
+        Pagination: CursorPaginationMeta{
+            NextCursor: nextCursor,
+            HasMore:    nextCursor != "",
+            Count:      len(tasks),
+        },
+        TotalCount: totalCount,
+    }
+    
+    if cacheBytes, err := json.Marshal(cacheData); err == nil {
+        s.cache.Set(cacheKey, string(cacheBytes), defaultCacheTime)
+    }
 
-	return tasks, nil
+    return tasks, nextCursor, totalCount, nil
 }
 
 func (s *TaskService) ListById(id int) (*models.Task, error) {
 	var task *models.Task
-	cacheKey := "task_" + strconv.Itoa(id)
+    cacheKey := fmt.Sprintf("task_%d", id)
 
-	// Try to get task from cache
-	err := s.cache.Get(cacheKey, &task)
-	if err == nil {
-		return task, nil
-	}
+    if err := s.cache.Get(cacheKey, &task); err == nil {
+        return task, nil
+    }
 
-	// If cache miss, get task from repository
-	task, err = s.repo.ListById(id)
-	if err != nil {
-		return nil, err
-	}
+    task, err := s.repo.ListById(id)
+    if err != nil {
+        return nil, fmt.Errorf("failed to get task by id: %w", err)
+    }
 
-	// Cache the task
-	s.cache.Set(cacheKey, task, 10*time.Minute)
+    if task == nil {
+        return nil, fmt.Errorf("task with id %d not found", id)
+    }
 
-	return task, nil
+    s.cache.Set(cacheKey, task, 10*time.Minute)
+    return task, nil
 }
 
 func (s *TaskService) Create(task *models.Task) error {
-	return s.repo.Create(task)
+    if task == nil {
+        return fmt.Errorf("invalid task data")
+    }
+
+    if err := s.repo.Create(task); err != nil {
+        return fmt.Errorf("failed to create task: %w", err)
+    }
+
+    // Invalidate list cache
+    s.cache.Delete("tasks_list*")
+    return nil
 }
 
 func (s *TaskService) Update(task *models.Task) error {
-	existingTask, err := s.repo.ListById(int(task.ID))
-	if err != nil {
-		return err
-	}
+    if task == nil {
+        return fmt.Errorf("invalid task data")
+    }
 
-	if existingTask == nil {
-		return errors.New("Todo not found")
-	}
+    existingTask, err := s.repo.ListById(int(task.ID))
+    if err != nil {
+        return fmt.Errorf("failed to verify task existence: %w", err)
+    }
 
-	return s.repo.Update(task)
+    if existingTask == nil {
+        return fmt.Errorf("task with id %d not found", task.ID)
+    }
+
+    if err := s.repo.Update(task); err != nil {
+        return fmt.Errorf("failed to update task: %w", err)
+    }
+
+    // Invalidate caches
+    s.cache.Delete(fmt.Sprintf("task_%d", task.ID))
+    s.cache.Delete("tasks_list*")
+    return nil
 }
 
 func (s *TaskService) Done(id int, done bool) (*models.Task, error) {
-	existingTask, err := s.repo.ListById(id)
-	if err != nil {
-		return nil, err
-	}
+    existingTask, err := s.repo.ListById(id)
+    if err != nil {
+        return nil, fmt.Errorf("failed to get task: %w", err)
+    }
 
-	if existingTask == nil {
-		return nil, errors.New("Todo not found")
-	}
+    if existingTask == nil {
+        return nil, fmt.Errorf("task with id %d not found", id)
+    }
 
-	existingTask.Done = done
+    existingTask.Done = done
+    if err := s.repo.Update(existingTask); err != nil {
+        return nil, fmt.Errorf("failed to update task status: %w", err)
+    }
 
-	// Save the updated in the database.
-	err = s.repo.Update(existingTask)
-	if err != nil {
-		return nil, err
-	}
-	return existingTask, nil
+    // Invalidate caches
+    s.cache.Delete(fmt.Sprintf("task_%d", id))
+    s.cache.Delete("tasks_list*")
+    return existingTask, nil
 }
 
 func (s *TaskService) Delete(id int) error {
-	return s.repo.Delete(id)
+    if err := s.repo.Delete(id); err != nil {
+        return fmt.Errorf("failed to delete task: %w", err)
+    }
+
+    // Invalidate caches
+    s.cache.Delete(fmt.Sprintf("task_%d", id))
+    s.cache.Delete("tasks_list*")
+    return nil
 }
