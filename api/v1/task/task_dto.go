@@ -1,6 +1,8 @@
 package task
 
 import (
+	"time"
+
 	"github.com/hftamayo/gotodo/api/v1/models"
 )
 
@@ -32,7 +34,10 @@ type CursorPaginationMeta struct {
 
 type TaskListResponse struct {
     Tasks      []*TaskResponse `json:"tasks"`
-    Pagination CursorPaginationMeta  `json:"pagination"`
+    Pagination struct {
+        NextCursor string `json:"nextCursor"`
+        Limit     int    `json:"limit"`
+    } `json:"pagination"`
 }
 
 type TaskResponse struct {
@@ -41,6 +46,8 @@ type TaskResponse struct {
     Description string `json:"description"`
     Done        bool   `json:"done"`
     Owner       uint   `json:"owner"`
+    CreatedAt   time.Time `json:"createdAt"`
+    UpdatedAt   time.Time `json:"updatedAt"`    
 }
 
 func ToTaskResponse(task *models.Task) *TaskResponse {
