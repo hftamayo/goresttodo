@@ -12,8 +12,6 @@ const (
 )
 
 func SetupTaskRoutes(r *gin.Engine, handler *task.Handler) {
-	const todoIDPath = "/tasks/task/:id"
-
     taskGroup := r.Group(basePath)
     {
         taskGroup.GET("/list", handler.List)
