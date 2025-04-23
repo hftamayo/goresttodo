@@ -13,7 +13,7 @@ import "gorm.io/gorm"
 type Task struct {
 	gorm.Model
 	Title string `gorm:"type:varchar(100)" json:"title"`
-	Description  string `gorm:"type:text" json:"body"`
+	Description  string `gorm:"type:text" json:"description"`
 	Done  bool   `gorm:"default:false" json:"done"`
 	Owner  uint   `json:"owner"` 
     User    User   `gorm:"foreignKey:Owner" json:"user"` 
