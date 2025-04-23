@@ -1,6 +1,7 @@
 package task
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -9,66 +10,57 @@ import (
 )
 
 const (
-    defaultCacheTime = 10 * time.Minute
+    defaultCacheTime        = 10 * time.Minute
     serviceDefaultLimit     = 10
-    serviceMaxLimit        = 100
+    serviceMaxLimit         = 100
 )
-
-
-var _ TaskServiceInterface = (*TaskService)(nil)
 
 type TaskService struct {
 	repo  TaskRepository
 	cache *utils.Cache
 }
 
+var _ TaskServiceInterface = (*TaskService)(nil)
+
+var cachedData struct {
+    Tasks      []*models.Task        `json:"tasks"`
+    Pagination CursorPaginationMeta  `json:"pagination"`
+}
+
 func NewTaskService(repo TaskRepository, cache *utils.Cache) TaskServiceInterface {
 	return &TaskService{repo: repo, cache: cache}
 }
 
-func (s *TaskService) List(limit int, cursorStr string) ([]*models.Task, *CursorPaginationMeta, error) {
-    if limit <= 0 {
-        limit = defaultLimit
-    }
-    if limit > maxLimit {
-        limit = maxLimit
-    }
-
+func (s *TaskService) List(cursor string, limit int) ([]*models.Task, string, error) {
     // Try to get from cache first
-    cacheKey := fmt.Sprintf("tasks_cursor_%s_limit_%d", cursorStr, limit)
-    var cachedResult struct {
-        Tasks    []*models.Task
-        Metadata *CursorPaginationMeta
-    }
-
-    if err := s.cache.Get(cacheKey, &cachedResult); err == nil {
-        return cachedResult.Tasks, cachedResult.Metadata, nil
+    cacheKey := fmt.Sprintf("tasks_cursor_%s_limit_%d", cursor, limit)
+    if err := s.cache.Get(cacheKey, &cachedData); err == nil {
+        return cachedData.Tasks, cachedData.Pagination.NextCursor, nil
     }
 
     // Get from repository
-    tasks, nextCursor, err := s.repo.List(limit, cursorStr)
+    tasks, nextCursor, err := s.repo.List(limit, cursor)
     if err != nil {
-        return nil, nil, fmt.Errorf("failed to list tasks: %w", err)
+        return nil, "", fmt.Errorf("failed to list tasks: %w", err)
     }
 
-    // Build pagination metadata
-    metadata := &CursorPaginationMeta{
-        HasMore:    nextCursor != "",
-        NextCursor: nextCursor,
-        Count:      len(tasks),
-    }
-
-    // Cache the result
-    result := struct {
-        Tasks    []*models.Task
-        Metadata *CursorPaginationMeta
+    cacheData := struct {
+        Tasks      []*models.Task       `json:"tasks"`
+        Pagination CursorPaginationMeta `json:"pagination"`
     }{
-        Tasks:    tasks,
-        Metadata: metadata,
+        Tasks: tasks,
+        Pagination: CursorPaginationMeta{
+            NextCursor: nextCursor,
+            HasMore:    nextCursor != "",
+            Count:      len(tasks),
+        },
     }
-    s.cache.Set(cacheKey, result, defaultCacheTime)
+    
+    if cacheBytes, err := json.Marshal(cacheData); err == nil {
+        s.cache.Set(cacheKey, string(cacheBytes), defaultCacheTime)
+    }
 
-    return tasks, metadata, nil
+    return tasks, nextCursor, nil
 }
 
 func (s *TaskService) ListById(id int) (*models.Task, error) {
