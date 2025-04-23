@@ -61,7 +61,7 @@ func (h *Handler) List(c *gin.Context) {
         query.Limit = maxLimit
     }    
 
-    tasks, nextCursor, err := h.service.List(query.Cursor, query.Limit)
+    tasks, nextCursor, totalCount, err := h.service.List(query.Cursor, query.Limit)
     if err != nil {
         h.errorLogService.LogError("Task_list", err)
         c.JSON(http.StatusInternalServerError, gin.H{
@@ -79,6 +79,8 @@ func (h *Handler) List(c *gin.Context) {
             "pagination": gin.H{
                 "nextCursor":     nextCursor,
                 "limit": query.Limit,
+                "totalCount": totalCount,
+                "hasMore":        nextCursor != "",
             },
         },
     })
