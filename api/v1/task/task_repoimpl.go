@@ -13,6 +13,11 @@ type TaskRepositoryImpl struct {
 	db *gorm.DB
 }
 
+const (
+    defaultLimit = 10
+    maxLimit    = 100
+)
+
 func NewTaskRepositoryImpl(db *gorm.DB) TaskRepository {
 	if db == nil {
 		fmt.Errorf("database connection is required")
@@ -20,12 +25,6 @@ func NewTaskRepositoryImpl(db *gorm.DB) TaskRepository {
 	}
 	return &TaskRepositoryImpl{db: db}
 }
-
-const (
-    defaultLimit = 10
-    maxLimit    = 100
-)
-
 
 func (r *TaskRepositoryImpl) List(limit int, cursorStr string) ([]*models.Task, string, error) {
     if limit <= 0 {
@@ -35,8 +34,9 @@ func (r *TaskRepositoryImpl) List(limit int, cursorStr string) ([]*models.Task, 
         limit = maxLimit
     }
 
-    query := r.db.Order("created_at DESC, id DESC")
-
+    query := r.db.Model(&models.Task{}).
+    Order("created_at DESC, id DESC").
+    Select("id, title, description, done, owner, created_at, updated_at")
     // If cursor is provided, decode and apply conditions
     if cursorStr != "" {
         c, err := cursor.Decode[uint](cursorStr)
@@ -44,7 +44,10 @@ func (r *TaskRepositoryImpl) List(limit int, cursorStr string) ([]*models.Task, 
             return nil, "", fmt.Errorf("invalid cursor: %w", err)
         }
         
-        query = query.Where("(created_at, id) < (?, ?)", c.Timestamp, c.ID)
+        query = query.Where("(created_at < ?) OR (created_at = ? AND id < ?)", 
+            c.Timestamp, 
+            c.Timestamp, 
+            c.ID)
     }
 
     var tasks []*models.Task
@@ -52,23 +55,27 @@ func (r *TaskRepositoryImpl) List(limit int, cursorStr string) ([]*models.Task, 
         return nil, "", fmt.Errorf("failed to fetch tasks: %w", err)
     }
 
-    var nextCursor string
     hasMore := len(tasks) > limit
-
-    // If we have more items than limit, create next cursor
-    if hasMore {
-        lastTask := tasks[len(tasks)-1]
-        c := cursor.Cursor[uint]{
-            ID:        lastTask.ID,
-            Timestamp: lastTask.CreatedAt,
-        }
-        nextCursor, _ = cursor.Encode(c, cursor.Options{
-            Field:     "created_at",
-            Direction: "DESC",
-        })
-        tasks = tasks[:limit] // Remove the extra item
+    if !hasMore {
+        return tasks, "", nil // Return empty string as cursor when no more results
     }
 
+    // Create next cursor from the last item
+    lastTask := tasks[len(tasks)-1]
+    c := cursor.Cursor[uint]{
+        ID:        lastTask.ID,
+        Timestamp: lastTask.CreatedAt,
+    }
+
+    nextCursor, err := cursor.Encode(c, cursor.Options{
+        Field:     "created_at",
+        Direction: "DESC",
+    })
+    if err != nil {
+        return nil, "", fmt.Errorf("failed to encode cursor: %w", err)
+    }
+    
+    tasks = tasks[:limit] // Remove the extra item used for cursor detection
     return tasks, nextCursor, nil
 }
 
