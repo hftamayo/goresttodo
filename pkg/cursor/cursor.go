@@ -21,8 +21,22 @@ type Options struct {
     Direction string // Sort direction ("ASC" or "DESC")
 }
 
+// ValidateOptions checks if the provided options are valid
+func ValidateOptions(opts Options) error {
+    if opts.Field == "" {
+        return fmt.Errorf("field option is required")
+    }
+    if opts.Direction != "ASC" && opts.Direction != "DESC" {
+        return fmt.Errorf("direction must be either ASC or DESC")
+    }
+    return nil
+}
+
 // Encode converts a cursor to a base64 string
 func Encode[T any](c Cursor[T], opts Options) (string, error) {
+    if err := ValidateOptions(opts); err != nil {
+        return "", err
+    }    
     // Convert ID to string based on type
     var idStr string
     switch v := any(c.ID).(type) {
@@ -42,6 +56,9 @@ func Encode[T any](c Cursor[T], opts Options) (string, error) {
 
 // Decode converts a base64 string back to a cursor
 func Decode[T any](str string) (Cursor[T], error) {
+    if str == "" {
+        return Cursor[T]{}, nil
+    }    
     bytes, err := base64.StdEncoding.DecodeString(str)
     if err != nil {
         return Cursor[T]{}, fmt.Errorf("failed to decode cursor: %w", err)
@@ -90,4 +107,18 @@ func Decode[T any](str string) (Cursor[T], error) {
     }
 
     return cursor, nil
+}
+
+// NewCursor creates a new cursor instance with validation
+func NewCursor[T any](id T, timestamp time.Time, extra string) Cursor[T] {
+    return Cursor[T]{
+        ID:        id,
+        Timestamp: timestamp,
+        Extra:     extra,
+    }
+}
+
+// IsEmpty checks if a cursor is empty/initial
+func (c Cursor[T]) IsEmpty() bool {
+    return c.Timestamp.IsZero()
 }
