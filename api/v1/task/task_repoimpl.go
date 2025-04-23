@@ -26,6 +26,16 @@ func NewTaskRepositoryImpl(db *gorm.DB) TaskRepository {
 	return &TaskRepositoryImpl{db: db}
 }
 
+func (r *TaskRepositoryImpl) GetTotalCount() (int64, error) {
+    var count int64
+    result := r.db.Model(&models.Task{}).Count(&count)
+    if result.Error != nil {
+        return 0, fmt.Errorf("failed to get total count: %w", result.Error)
+    }
+    
+    return count, nil
+}
+
 func (r *TaskRepositoryImpl) List(limit int, cursorStr string) ([]*models.Task, string, error) {
     if limit <= 0 {
         limit = defaultLimit
@@ -55,29 +65,25 @@ func (r *TaskRepositoryImpl) List(limit int, cursorStr string) ([]*models.Task, 
         return nil, "", fmt.Errorf("failed to fetch tasks: %w", err)
     }
 
+    var nextCursor string
     hasMore := len(tasks) > limit
-    if !hasMore {
-        return tasks, "", nil // Return empty string as cursor when no more results
+
+    if hasMore {
+        lastTask := tasks[len(tasks)-1]
+        c := cursor.Cursor[uint]{
+            ID:        lastTask.ID,
+            Timestamp: lastTask.CreatedAt,
+        }
+        nextCursor, _ = cursor.Encode(c, cursor.Options{
+            Field:     "created_at",
+            Direction: "DESC",
+        })
+        tasks = tasks[:limit]
     }
 
-    // Create next cursor from the last item
-    lastTask := tasks[len(tasks)-1]
-    c := cursor.Cursor[uint]{
-        ID:        lastTask.ID,
-        Timestamp: lastTask.CreatedAt,
-    }
-
-    nextCursor, err := cursor.Encode(c, cursor.Options{
-        Field:     "created_at",
-        Direction: "DESC",
-    })
-    if err != nil {
-        return nil, "", fmt.Errorf("failed to encode cursor: %w", err)
-    }
-    
-    tasks = tasks[:limit] // Remove the extra item used for cursor detection
     return tasks, nextCursor, nil
 }
+
 
 func (r *TaskRepositoryImpl) ListById(id int) (*models.Task, error) {
     if id < 1 {

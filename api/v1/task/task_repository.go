@@ -10,6 +10,7 @@ type TaskRepository interface {
 	Create(task *models.Task) error
 	Update(task *models.Task) error
 	Delete(id int) error
+	GetTotalCount() (int64, error)
 }
 
 // Ensure TaskRepositoryImpl implements TaskRepository at compile time
