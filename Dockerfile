@@ -24,6 +24,6 @@ EXPOSE 8001
 
 CMD ["./gotodo"]
 #how to run this file:
-#docker build --no-cache --platform linux/amd64 -t hftamayo/goresttodo:0.1.3-experimental .
+#docker build --no-cache --platform linux/amd64 -t hftamayo/goresttodo:0.2.0-experimental .
 # docker network create godev_network.
 #docker run --name goresttodo --network developer_network -p 8001:8001 -d --env-file .env hftamayo/goresttodo:0.2.0-experimental
