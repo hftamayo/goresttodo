@@ -47,7 +47,7 @@ func (h *Handler) List(c *gin.Context) {
     if err := c.ShouldBindQuery(&query); err != nil {
         h.errorLogService.LogError("Task_list_validation", err)
         c.JSON(http.StatusBadRequest, gin.H{
-            "httpStatusCode": http.StatusBadRequest,
+            "code": http.StatusBadRequest,
             "resultMessage": utils.OperationFailed,
             "error": ErrInvalidPaginationParams,
         })
@@ -72,7 +72,7 @@ func (h *Handler) List(c *gin.Context) {
     }
 
     c.JSON(http.StatusOK, gin.H{
-        "httpStatusCode": http.StatusOK,
+        "code": http.StatusOK,
         "resultMessage": utils.OperationSuccess,
         "data": gin.H{
             "tasks": TasksToResponse(tasks),
@@ -93,7 +93,7 @@ func (h *Handler) ListById(c *gin.Context) {
 	if err != nil {
 		h.errorLogService.LogError("Task_list_by_id", err)
 		c.JSON(http.StatusBadRequest, gin.H{
-			"httpStatusCode": http.StatusBadRequest,
+			"code": http.StatusBadRequest,
 			"resultMessage": utils.OperationFailed,
 			"error":        ErrInvalidID,
 		})
@@ -103,7 +103,7 @@ func (h *Handler) ListById(c *gin.Context) {
 	if err != nil {
 		h.errorLogService.LogError("Task_list_by_id", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"httpStatusCode": http.StatusInternalServerError,
+			"code": http.StatusInternalServerError,
 			"resultMessage": utils.OperationFailed,
 		})
 		return
@@ -111,7 +111,7 @@ func (h *Handler) ListById(c *gin.Context) {
 
     if task == nil {
         c.JSON(http.StatusNotFound, gin.H{
-            "httpStatusCode": http.StatusNotFound,
+            "code": http.StatusNotFound,
             "resultMessage": utils.OperationFailed,
             "error":        ErrTaskNotFound,
         })
@@ -119,7 +119,7 @@ func (h *Handler) ListById(c *gin.Context) {
     }
 
 	c.JSON(http.StatusOK, gin.H{
-		"httpStatusCode": http.StatusOK,
+		"code": http.StatusOK,
 		"resultMessage": utils.OperationSuccess,
 		"data":         ToTaskResponse(task),
 	})
@@ -130,7 +130,7 @@ func (h *Handler) Create(c *gin.Context) {
 	if err := c.ShouldBindJSON(&createRequest); err != nil {
 		h.errorLogService.LogError("Task_create", err)
 		c.JSON(http.StatusBadRequest, gin.H{
-			"httpStatusCode": http.StatusBadRequest,
+			"code": http.StatusBadRequest,
 			"resultMessage": utils.OperationFailed,
 			"error":        ErrInvalidRequest,
 		})
@@ -145,14 +145,14 @@ func (h *Handler) Create(c *gin.Context) {
     if err := h.service.Create(task); err != nil {
         h.errorLogService.LogError("Task_create", err)
         c.JSON(http.StatusInternalServerError, gin.H{
-            "httpStatusCode": http.StatusInternalServerError,
+            "code": http.StatusInternalServerError,
             "resultMessage": utils.OperationFailed,
         })
         return
     }
 
     c.JSON(http.StatusCreated, gin.H{
-        "httpStatusCode": http.StatusCreated,
+        "code": http.StatusCreated,
         "resultMessage": utils.OperationSuccess,
         "data":         ToTaskResponse(task),
     })
@@ -162,7 +162,7 @@ func (h *Handler) Update(c *gin.Context) {
     id, err := strconv.Atoi(c.Param("id"))
     if err != nil {
         c.JSON(http.StatusBadRequest, gin.H{
-            "httpStatusCode": http.StatusBadRequest,
+            "code": http.StatusBadRequest,
             "resultMessage": utils.OperationFailed,
             "error":        ErrInvalidID,
         })
@@ -173,7 +173,7 @@ func (h *Handler) Update(c *gin.Context) {
     if err := c.ShouldBindJSON(&updateRequest); err != nil {
 		h.errorLogService.LogError("Task_update_binding", err)
         c.JSON(http.StatusBadRequest, gin.H{
-            "httpStatusCode": http.StatusBadRequest,
+            "code": http.StatusBadRequest,
             "resultMessage": utils.OperationFailed,
             "error":        "Invalid request body",
         })
@@ -189,14 +189,14 @@ func (h *Handler) Update(c *gin.Context) {
     if err := h.service.Update(task); err != nil {
         h.errorLogService.LogError("Task_update", err)
         c.JSON(http.StatusInternalServerError, gin.H{
-            "httpStatusCode": http.StatusInternalServerError,
+            "code": http.StatusInternalServerError,
             "resultMessage": utils.OperationFailed,
         })
         return
     }
 
     c.JSON(http.StatusOK, gin.H{
-        "httpStatusCode": http.StatusOK,
+        "code": http.StatusOK,
         "resultMessage": utils.OperationSuccess,
         "data":         ToTaskResponse(task),
     })
@@ -208,7 +208,7 @@ func (h *Handler) Done(c *gin.Context) {
 	if err != nil {
 		h.errorLogService.LogError("Task_done", err)
 		c.JSON(http.StatusBadRequest, gin.H{
-			"httpStatusCode": http.StatusBadRequest,
+			"code": http.StatusBadRequest,
 			"resultMessage": utils.OperationFailed,
 			"error":        ErrInvalidID,
 		})
@@ -219,7 +219,7 @@ func (h *Handler) Done(c *gin.Context) {
     if err := c.ShouldBindJSON(&doneRequest); err != nil {
         h.errorLogService.LogError("Task_done_binding", err)
         c.JSON(http.StatusBadRequest, gin.H{
-            "httpStatusCode": http.StatusBadRequest,
+            "code": http.StatusBadRequest,
             "resultMessage": utils.OperationFailed,
             "error":        ErrInvalidRequest,
         })
@@ -230,14 +230,14 @@ func (h *Handler) Done(c *gin.Context) {
     if err != nil {
         h.errorLogService.LogError("Task_done", err)
         c.JSON(http.StatusInternalServerError, gin.H{
-            "httpStatusCode": http.StatusInternalServerError,
+            "code": http.StatusInternalServerError,
             "resultMessage": utils.OperationFailed,
         })
         return
     }
 
     c.JSON(http.StatusOK, gin.H{
-        "httpStatusCode": http.StatusOK,
+        "code": http.StatusOK,
         "resultMessage": utils.OperationSuccess,
         "data":         ToTaskResponse(task),
     })
@@ -249,7 +249,7 @@ func (h *Handler) Delete(c *gin.Context) {
 	if err != nil {
 		h.errorLogService.LogError("Task_delete", err)
 		c.JSON(http.StatusBadRequest, gin.H{
-			"httpStatusCode": http.StatusBadRequest,
+			"code": http.StatusBadRequest,
 			"resultMessage": utils.OperationFailed,
 			"error":        ErrInvalidID,
 		})
@@ -259,14 +259,14 @@ func (h *Handler) Delete(c *gin.Context) {
     if err := h.service.Delete(id); err != nil {
         h.errorLogService.LogError("Task_delete", err)
         c.JSON(http.StatusInternalServerError, gin.H{
-            "httpStatusCode": http.StatusInternalServerError,
+            "code": http.StatusInternalServerError,
             "resultMessage": utils.OperationFailed,
         })
         return
     }
 
     c.JSON(http.StatusOK, gin.H{
-        "httpStatusCode": http.StatusOK,
+        "code": http.StatusOK,
         "resultMessage": utils.OperationSuccess,
     })
 }
