@@ -102,15 +102,15 @@ func (r *TaskRepositoryImpl) ListById(id int) (*models.Task, error) {
 	return &task, nil
 }
 
-func (r *TaskRepositoryImpl) Create(task *models.Task) error {
+func (r *TaskRepositoryImpl) Create(task *models.Task) (*models.Task, error) {
     if task == nil {
-        return errors.New("task cannot be nil")
+        return nil, errors.New("task cannot be nil")
     }
 	
 	if result := r.db.Create(task); result.Error != nil {
-		return result.Error
+		return nil, result.Error
 	}
-	return nil
+	return task, nil
 }
 
 func (r *TaskRepositoryImpl) Update(id int, task *models.Task) (*models.Task, error) {
