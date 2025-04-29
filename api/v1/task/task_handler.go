@@ -145,54 +145,59 @@ func (h *Handler) Create(c *gin.Context) {
 	var createRequest CreateTaskRequest
 	if err := c.ShouldBindJSON(&createRequest); err != nil {
 		h.errorLogService.LogError("Task_create", err)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code": http.StatusBadRequest,
-			"resultMessage": utils.OperationFailed,
-			"error":        ErrInvalidRequest,
-		})
-		return
-	}
+        c.JSON(http.StatusBadRequest, NewErrorResponse(
+            http.StatusBadRequest,
+            utils.OperationFailed,
+            ErrInvalidRequest,
+        ))
+        return
+    }
+
     task := &models.Task{
         Title:       createRequest.Title,
         Description: createRequest.Description,
         Owner:       createRequest.Owner,
     }
 
-    if err := h.service.Create(task); err != nil {
+    createdTask, err := h.service.Create(task)
+    if err != nil {
         h.errorLogService.LogError("Task_create", err)
-        c.JSON(http.StatusInternalServerError, gin.H{
-            "code": http.StatusInternalServerError,
-            "resultMessage": utils.OperationFailed,
-        })
+        c.JSON(http.StatusInternalServerError, NewErrorResponse(
+            http.StatusInternalServerError,
+            utils.OperationFailed,
+            "Failed to create task",
+        ))
         return
     }
 
-    c.JSON(http.StatusCreated, gin.H{
-        "code": http.StatusCreated,
-        "resultMessage": utils.OperationSuccess,
-        "data":         ToTaskResponse(task),
-    })
+    response := TaskOperationResponse{
+        Code:          http.StatusCreated,
+        ResultMessage: utils.OperationSuccess,
+        Task:          ToTaskResponse(createdTask),
+    }
+    c.JSON(http.StatusCreated, response)
 }
 
 func (h *Handler) Update(c *gin.Context) {
     id, err := strconv.Atoi(c.Param("id"))
     if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{
-            "code": http.StatusBadRequest,
-            "resultMessage": utils.OperationFailed,
-            "error":        ErrInvalidID,
-        })
+        h.errorLogService.LogError("Task_update_id", err)
+        c.JSON(http.StatusBadRequest, NewErrorResponse(
+            http.StatusBadRequest,
+            utils.OperationFailed,
+            ErrInvalidID,
+        ))
         return
     }
 
     var updateRequest UpdateTaskRequest
     if err := c.ShouldBindJSON(&updateRequest); err != nil {
 		h.errorLogService.LogError("Task_update_binding", err)
-        c.JSON(http.StatusBadRequest, gin.H{
-            "code": http.StatusBadRequest,
-            "resultMessage": utils.OperationFailed,
-            "error":        "Invalid request body",
-        })
+        c.JSON(http.StatusBadRequest, NewErrorResponse(
+            http.StatusBadRequest,
+            utils.OperationFailed,
+            ErrInvalidRequest,
+        ))
         return
     }
 
@@ -200,22 +205,25 @@ func (h *Handler) Update(c *gin.Context) {
         Model:       gorm.Model{ID: uint(id)},
         Title:       updateRequest.Title,
         Description: updateRequest.Description,
-    }	
+    }
 
-    if err := h.service.Update(task); err != nil {
+    updatedTask, err := h.service.Update(id, task)
+    if err != nil {
         h.errorLogService.LogError("Task_update", err)
-        c.JSON(http.StatusInternalServerError, gin.H{
-            "code": http.StatusInternalServerError,
-            "resultMessage": utils.OperationFailed,
-        })
+        c.JSON(http.StatusInternalServerError, NewErrorResponse(
+            http.StatusInternalServerError,
+            utils.OperationFailed,
+            "Failed to update task",
+        ))
         return
     }
 
-    c.JSON(http.StatusOK, gin.H{
-        "code": http.StatusOK,
-        "resultMessage": utils.OperationSuccess,
-        "data":         ToTaskResponse(task),
-    })
+    response := TaskOperationResponse{
+        Code:          http.StatusOK,
+        ResultMessage: utils.OperationSuccess,
+        Task:          ToTaskResponse(updatedTask),
+    }
+    c.JSON(http.StatusOK, response)
 }
 
 func (h *Handler) Done(c *gin.Context) {
