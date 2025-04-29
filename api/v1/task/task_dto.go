@@ -54,6 +54,12 @@ type TaskOperationResponse struct {
     Task          *TaskResponse `json:"task"`
 }
 
+type ErrorResponse struct {
+    Code          int    `json:"code"`
+    ResultMessage string `json:"resultMessage"`
+    Error         string `json:"error,omitempty"`
+}
+
 func ToTaskResponse(task *models.Task) *TaskResponse {
     return &TaskResponse{
         ID:          task.ID,
@@ -72,4 +78,12 @@ func TasksToResponse(tasks []*models.Task) []*TaskResponse {
         taskResponses[i] = ToTaskResponse(task)
     }
     return taskResponses
+}
+
+func NewErrorResponse(code int, resultMessage string, err string) *ErrorResponse {
+    return &ErrorResponse{
+        Code:          code,
+        ResultMessage: resultMessage,
+        Error:         err,
+    }
 }
