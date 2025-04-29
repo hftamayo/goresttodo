@@ -136,7 +136,7 @@ func (h *Handler) ListById(c *gin.Context) {
     response := TaskOperationResponse{
         Code:          http.StatusOK,
         ResultMessage: utils.OperationSuccess,
-        Task:          ToTaskResponse(task),
+        Data:          ToTaskResponse(task),
     }
     c.JSON(http.StatusOK, response)
 }
@@ -173,7 +173,7 @@ func (h *Handler) Create(c *gin.Context) {
     response := TaskOperationResponse{
         Code:          http.StatusCreated,
         ResultMessage: utils.OperationSuccess,
-        Task:          ToTaskResponse(createdTask),
+        Data:          ToTaskResponse(createdTask),
     }
     c.JSON(http.StatusCreated, response)
 }
@@ -221,7 +221,7 @@ func (h *Handler) Update(c *gin.Context) {
     response := TaskOperationResponse{
         Code:          http.StatusOK,
         ResultMessage: utils.OperationSuccess,
-        Task:          ToTaskResponse(updatedTask),
+        Data:          ToTaskResponse(updatedTask),
     }
     c.JSON(http.StatusOK, response)
 }
@@ -253,7 +253,7 @@ func (h *Handler) Done(c *gin.Context) {
     response := TaskOperationResponse{
         Code:          http.StatusOK,
         ResultMessage: utils.OperationSuccess,
-        Task:          ToTaskResponse(updatedTask),
+        Data:          ToTaskResponse(updatedTask),
     }
     c.JSON(http.StatusOK, response)
 }

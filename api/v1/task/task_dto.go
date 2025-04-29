@@ -51,7 +51,7 @@ type TaskResponse struct {
 type TaskOperationResponse struct {
     Code          int           `json:"code"`
     ResultMessage string        `json:"resultMessage"`
-    Task          *TaskResponse `json:"task"`
+    Data          *TaskResponse `json:"data"`
 }
 
 type ErrorResponse struct {
