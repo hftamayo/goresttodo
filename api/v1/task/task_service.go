@@ -151,14 +151,15 @@ func (s *TaskService) MarkAsDone(id int) (*models.Task, error) {
         return nil, fmt.Errorf("task with id %d not found", id)
     }
 
-    if err := s.repo.MarkAsDone(id); err != nil {
-        return nil, fmt.Errorf("failed to update task status: %w", err)
+    updatedTask, err := s.repo.MarkAsDone(id)
+    if err != nil {
+        return nil, fmt.Errorf("failed to mark task as done: %w", err)
     }
 
     // Invalidate caches
     s.cache.Delete(fmt.Sprintf("task_%d", id))
     s.cache.Delete("tasks_list*")
-    return existingTask, nil
+    return updatedTask, nil
 }
 
 func (s *TaskService) Delete(id int) error {
