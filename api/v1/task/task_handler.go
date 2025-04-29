@@ -72,7 +72,7 @@ func (h *Handler) List(c *gin.Context) {
         return
     }
 
-    response := TaskListResponse{
+    listResponse := TaskListResponse{
         Tasks: TasksToResponse(tasks),
         Pagination: struct {
             NextCursor string `json:"nextCursor"`
@@ -86,6 +86,13 @@ func (h *Handler) List(c *gin.Context) {
             HasMore:   nextCursor != "",
         },
     }
+
+    response := TaskOperationResponse{
+        Code:          http.StatusOK,
+        ResultMessage: utils.OperationSuccess,
+        Data:         listResponse,
+    }    
+
 
     c.JSON(http.StatusOK, response)
 }
