@@ -46,11 +46,11 @@ func (h *Handler) List(c *gin.Context) {
     var query CursorPaginationQuery
     if err := c.ShouldBindQuery(&query); err != nil {
         h.errorLogService.LogError("Task_list_validation", err)
-        c.JSON(http.StatusBadRequest, gin.H{
-            "code": http.StatusBadRequest,
-            "resultMessage": utils.OperationFailed,
-            "error": ErrInvalidPaginationParams,
-        })
+        c.JSON(http.StatusBadRequest, NewErrorResponse(
+            http.StatusBadRequest,
+            utils.OperationFailed,
+            ErrInvalidPaginationParams,
+        ))
         return
     }
 
@@ -64,26 +64,30 @@ func (h *Handler) List(c *gin.Context) {
     tasks, nextCursor, totalCount, err := h.service.List(query.Cursor, query.Limit)
     if err != nil {
         h.errorLogService.LogError("Task_list", err)
-        c.JSON(http.StatusInternalServerError, gin.H{
-            "code": http.StatusInternalServerError,
-            "resultMessage": utils.OperationFailed,
-        })
+        c.JSON(http.StatusInternalServerError, NewErrorResponse(
+            http.StatusInternalServerError,
+            utils.OperationFailed,
+            "Failed to fetch tasks",
+        ))
         return
     }
 
-    c.JSON(http.StatusOK, gin.H{
-        "code": http.StatusOK,
-        "resultMessage": utils.OperationSuccess,
-        "data": gin.H{
-            "tasks": TasksToResponse(tasks),
-            "pagination": gin.H{
-                "nextCursor": nextCursor,
-                "limit": query.Limit,
-                "totalCount": totalCount,
-                "hasMore": nextCursor != "",
-            },
+    response := TaskListResponse{
+        Tasks: TasksToResponse(tasks),
+        Pagination: struct {
+            NextCursor string `json:"nextCursor"`
+            Limit     int    `json:"limit"`
+            TotalCount int64  `json:"totalCount"`
+            HasMore   bool   `json:"hasMore"`
+        }{
+            NextCursor: nextCursor,
+            Limit:     query.Limit,
+            TotalCount: totalCount,
+            HasMore:   nextCursor != "",
         },
-    })
+    }
+
+    c.JSON(http.StatusOK, response)
 }
 
 
@@ -92,22 +96,24 @@ func (h *Handler) ListById(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		h.errorLogService.LogError("Task_list_by_id", err)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code": http.StatusBadRequest,
-			"resultMessage": utils.OperationFailed,
-			"error":        ErrInvalidID,
-		})
-		return
-	}
+        c.JSON(http.StatusBadRequest, NewErrorResponse(
+            http.StatusBadRequest,
+            utils.OperationFailed,
+            ErrInvalidID,
+        ))
+        return
+    }
+
 	task, err := h.service.ListById(id)
-	if err != nil {
-		h.errorLogService.LogError("Task_list_by_id", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code": http.StatusInternalServerError,
-			"resultMessage": utils.OperationFailed,
-		})
-		return
-	}
+    if err != nil {
+        h.errorLogService.LogError("Task_list_by_id", err)
+        c.JSON(http.StatusInternalServerError, NewErrorResponse(
+            http.StatusInternalServerError,
+            utils.OperationFailed,
+            "Failed to fetch task",
+        ))
+        return
+    }
 
     if task == nil {
         c.JSON(http.StatusNotFound, gin.H{
@@ -118,11 +124,21 @@ func (h *Handler) ListById(c *gin.Context) {
         return
     }
 
-	c.JSON(http.StatusOK, gin.H{
-		"code": http.StatusOK,
-		"resultMessage": utils.OperationSuccess,
-		"data":         ToTaskResponse(task),
-	})
+    if task == nil {
+        c.JSON(http.StatusNotFound, NewErrorResponse(
+            http.StatusNotFound,
+            utils.OperationFailed,
+            ErrTaskNotFound,
+        ))
+        return
+    }
+
+    response := TaskOperationResponse{
+        Code:          http.StatusOK,
+        ResultMessage: utils.OperationSuccess,
+        Task:          ToTaskResponse(task),
+    }
+    c.JSON(http.StatusOK, response)
 }
 
 func (h *Handler) Create(c *gin.Context) {
