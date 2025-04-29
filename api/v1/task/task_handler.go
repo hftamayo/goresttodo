@@ -229,42 +229,33 @@ func (h *Handler) Update(c *gin.Context) {
 func (h *Handler) Done(c *gin.Context) {
 	// Parse the ID from the URL parameter.
 	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		h.errorLogService.LogError("Task_done", err)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code": http.StatusBadRequest,
-			"resultMessage": utils.OperationFailed,
-			"error":        ErrInvalidID,
-		})
-		return
-	}
-
-    var doneRequest DoneTaskRequest
-    if err := c.ShouldBindJSON(&doneRequest); err != nil {
-        h.errorLogService.LogError("Task_done_binding", err)
-        c.JSON(http.StatusBadRequest, gin.H{
-            "code": http.StatusBadRequest,
-            "resultMessage": utils.OperationFailed,
-            "error":        ErrInvalidRequest,
-        })
-        return
-    }
-
-    task, err := h.service.Done(id, doneRequest.Done)
     if err != nil {
         h.errorLogService.LogError("Task_done", err)
-        c.JSON(http.StatusInternalServerError, gin.H{
-            "code": http.StatusInternalServerError,
-            "resultMessage": utils.OperationFailed,
-        })
+        c.JSON(http.StatusBadRequest, NewErrorResponse(
+            http.StatusBadRequest,
+            utils.OperationFailed,
+            ErrInvalidID,
+        ))
         return
     }
 
-    c.JSON(http.StatusOK, gin.H{
-        "code": http.StatusOK,
-        "resultMessage": utils.OperationSuccess,
-        "data":         ToTaskResponse(task),
-    })
+    updatedTask, err := h.service.MarkAsDone(id)
+    if err != nil {
+        h.errorLogService.LogError("Task_done", err)
+        c.JSON(http.StatusInternalServerError, NewErrorResponse(
+            http.StatusInternalServerError,
+            utils.OperationFailed,
+            "Failed to mark task as done",
+        ))
+        return
+    }
+
+    response := TaskOperationResponse{
+        Code:          http.StatusOK,
+        ResultMessage: utils.OperationSuccess,
+        Task:          ToTaskResponse(updatedTask),
+    }
+    c.JSON(http.StatusOK, response)
 }
 
 func (h *Handler) Delete(c *gin.Context) {
@@ -272,20 +263,21 @@ func (h *Handler) Delete(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		h.errorLogService.LogError("Task_delete", err)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code": http.StatusBadRequest,
-			"resultMessage": utils.OperationFailed,
-			"error":        ErrInvalidID,
-		})
-		return
-	}
+        c.JSON(http.StatusBadRequest, NewErrorResponse(
+            http.StatusBadRequest,
+            utils.OperationFailed,
+            ErrInvalidID,
+        ))
+        return
+    }
 
     if err := h.service.Delete(id); err != nil {
         h.errorLogService.LogError("Task_delete", err)
-        c.JSON(http.StatusInternalServerError, gin.H{
-            "code": http.StatusInternalServerError,
-            "resultMessage": utils.OperationFailed,
-        })
+        c.JSON(http.StatusInternalServerError, NewErrorResponse(
+            http.StatusInternalServerError,
+            utils.OperationFailed,
+            "Failed to delete task",
+        ))
         return
     }
 
