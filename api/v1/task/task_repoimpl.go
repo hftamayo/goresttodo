@@ -155,7 +155,7 @@ func (r *TaskRepositoryImpl) MarkAsDone(id int) (*models.Task, error) {
         return nil, fmt.Errorf("failed to mark task as done: %w", result.Error)
     }
     if result.RowsAffected == 0 {
-        return fmt.Errorf("task not found: %d", task.ID)
+        return nil, fmt.Errorf("task not found: %d", id)
     }
     
     if err := r.db.First(&task, id).Error; err != nil {
