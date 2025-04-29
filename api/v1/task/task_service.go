@@ -93,18 +93,19 @@ func (s *TaskService) ListById(id int) (*models.Task, error) {
     return task, nil
 }
 
-func (s *TaskService) Create(task *models.Task) error {
+func (s *TaskService) Create(task *models.Task) (*models.Task, error) {
     if task == nil {
-        return fmt.Errorf("invalid task data")
+        return nil, fmt.Errorf("invalid task data")
     }
 
-    if err := s.repo.Create(task); err != nil {
-        return fmt.Errorf("failed to create task: %w", err)
+    createdTask, err := s.repo.Create(task)
+    if err != nil {
+        return nil, fmt.Errorf("failed to create task: %w", err)
     }
 
     // Invalidate list cache
     s.cache.Delete("tasks_list*")
-    return nil
+    return createdTask, nil
 }
 
 func (s *TaskService) Update(id int, task *models.Task) (*models.Task, error) {
