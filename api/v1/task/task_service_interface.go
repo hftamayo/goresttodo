@@ -8,5 +8,5 @@ type TaskServiceInterface interface {
     Create(task *models.Task) error
     Update(id int, task *models.Task) error
     Delete(id int) error
-    Done(id int) (*models.Task, error)
+    MarkAsDone(id int) (*models.Task, error)
 }
