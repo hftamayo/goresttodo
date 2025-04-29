@@ -113,26 +113,56 @@ func (r *TaskRepositoryImpl) Create(task *models.Task) error {
 	return nil
 }
 
-func (r *TaskRepositoryImpl) Update(task *models.Task) error {
+func (r *TaskRepositoryImpl) Update(id int, task *models.Task) (*models.Task, error) {
     if task == nil {
-        return errors.New("task cannot be nil")
+        return nil, errors.New("task cannot be nil")
     }
 	
      var existingTask models.Task
-    if err := r.db.First(&existingTask, task.ID).Error; err != nil {
+    if err := r.db.First(&existingTask, id).Error; err != nil {
         if errors.Is(err, gorm.ErrRecordNotFound) {
-            return fmt.Errorf("task not found: %d", task.ID)
+            return nil, fmt.Errorf("task not found: %d", id)
         }
-        return fmt.Errorf("failed to verify task existence: %w", err)
+        return nil, fmt.Errorf("failed to verify task existence: %w", err)
     }
 
     task.Owner = existingTask.Owner
 
-    if err := r.db.Save(task).Error; err != nil {
-        return fmt.Errorf("failed to update task: %w", err)
+    tx := r.db.Begin()
+    if err := tx.Save(task).Error; err != nil {
+        tx.Rollback()
+        return nil, fmt.Errorf("failed to update task: %w", err)
     }
 
-    return nil
+    var updatedTask models.Task
+    if err := tx.First(&updatedTask, id).Error; err != nil {
+        tx.Rollback()
+        return nil, fmt.Errorf("failed to fetch updated task: %w", err)
+    }
+
+
+    if err := tx.Commit().Error; err != nil {
+        return nil, fmt.Errorf("failed to commit transaction: %w", err)
+    }
+
+    return &updatedTask, nil
+}
+
+func (r *TaskRepositoryImpl) MarkAsDone(id int) (*models.Task, error) {
+    var task models.Task
+    result := r.db.Model(&models.Task{}).Where("id = ?", id).Update("done", true)
+    if result.Error != nil {
+        return nil, fmt.Errorf("failed to mark task as done: %w", result.Error)
+    }
+    if result.RowsAffected == 0 {
+        return fmt.Errorf("task not found: %d", task.ID)
+    }
+    
+    if err := r.db.First(&task, id).Error; err != nil {
+        return nil, fmt.Errorf("failed to fetch updated task: %w", err)
+    }
+    
+    return &task, nil
 }
 
 func (r *TaskRepositoryImpl) Delete(id int) error {
