@@ -17,10 +17,6 @@ type UpdateTaskRequest struct {
     Description string `json:"description" binding:"required"`
 }
 
-type DoneTaskRequest struct {
-    Done bool `json:"done" binding:"required"`
-}
-
 type CursorPaginationQuery struct {
     Limit  int    `form:"limit" binding:"required,min=1,max=100"`
     Cursor string `form:"cursor"`
@@ -37,6 +33,8 @@ type TaskListResponse struct {
     Pagination struct {
         NextCursor string `json:"nextCursor"`
         Limit     int    `json:"limit"`
+        TotalCount int64  `json:"totalCount"`
+        HasMore    bool   `json:"hasMore"`
     } `json:"pagination"`
 }
 
@@ -50,6 +48,12 @@ type TaskResponse struct {
     UpdatedAt   time.Time `json:"updatedAt"`    
 }
 
+type TaskOperationResponse struct {
+    Code          int           `json:"code"`
+    ResultMessage string        `json:"resultMessage"`
+    Task          *TaskResponse `json:"task"`
+}
+
 func ToTaskResponse(task *models.Task) *TaskResponse {
     return &TaskResponse{
         ID:          task.ID,
@@ -57,6 +61,8 @@ func ToTaskResponse(task *models.Task) *TaskResponse {
         Description: task.Description,
         Done:        task.Done,
         Owner:       task.Owner,
+        CreatedAt:   task.CreatedAt,
+        UpdatedAt:   task.UpdatedAt,
     }
 }
 
