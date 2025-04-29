@@ -107,36 +107,37 @@ func (s *TaskService) Create(task *models.Task) error {
     return nil
 }
 
-func (s *TaskService) Update(id int, task *models.Task) error {
+func (s *TaskService) Update(id int, task *models.Task) (*models.Task, error) {
     if task == nil {
-        return fmt.Errorf("invalid task data")
+        return nil, fmt.Errorf("invalid task data")
     }
 
     if int(task.ID) != id {
-        return fmt.Errorf("inconsistent task ID between URL and body")
+        return nil, fmt.Errorf("inconsistent task ID between URL and body")
     }    
 
     existingTask, err := s.repo.ListById(id)
     if err != nil {
-        return fmt.Errorf("failed to verify task existence: %w", err)
+        return nil, fmt.Errorf("failed to verify task existence: %w", err)
     }
 
     if existingTask == nil {
-        return fmt.Errorf("task with id %d not found", task.ID)
+        return nil, fmt.Errorf("task with id %d not found", task.ID)
     }
 
     // Prevent modification of immutable fields
     task.ID = uint(id)
     task.CreatedAt = existingTask.CreatedAt    
 
-    if err := s.repo.Update(id, task); err != nil {
-        return fmt.Errorf("failed to update task: %w", err)
+    updatedTask, err := s.repo.Update(id, task)
+     if err != nil {
+        return nil, fmt.Errorf("failed to update task: %w", err)
     }
 
     // Invalidate caches
     s.cache.Delete(fmt.Sprintf("task_%d", task.ID))
     s.cache.Delete("tasks_list*")
-    return nil
+    return updatedTask, nil
 }
 
 func (s *TaskService) MarkAsDone(id int) (*models.Task, error) {
