@@ -107,12 +107,16 @@ func (s *TaskService) Create(task *models.Task) error {
     return nil
 }
 
-func (s *TaskService) Update(task *models.Task) error {
+func (s *TaskService) Update(id int, task *models.Task) error {
     if task == nil {
         return fmt.Errorf("invalid task data")
     }
 
-    existingTask, err := s.repo.ListById(int(task.ID))
+    if int(task.ID) != id {
+        return fmt.Errorf("inconsistent task ID between URL and body")
+    }    
+
+    existingTask, err := s.repo.ListById(id)
     if err != nil {
         return fmt.Errorf("failed to verify task existence: %w", err)
     }
@@ -121,7 +125,11 @@ func (s *TaskService) Update(task *models.Task) error {
         return fmt.Errorf("task with id %d not found", task.ID)
     }
 
-    if err := s.repo.Update(task); err != nil {
+    // Prevent modification of immutable fields
+    task.ID = uint(id)
+    task.CreatedAt = existingTask.CreatedAt    
+
+    if err := s.repo.Update(id, task); err != nil {
         return fmt.Errorf("failed to update task: %w", err)
     }
 
@@ -131,7 +139,7 @@ func (s *TaskService) Update(task *models.Task) error {
     return nil
 }
 
-func (s *TaskService) Done(id int, done bool) (*models.Task, error) {
+func (s *TaskService) MarkAsDone(id int) (*models.Task, error) {
     existingTask, err := s.repo.ListById(id)
     if err != nil {
         return nil, fmt.Errorf("failed to get task: %w", err)
@@ -141,8 +149,7 @@ func (s *TaskService) Done(id int, done bool) (*models.Task, error) {
         return nil, fmt.Errorf("task with id %d not found", id)
     }
 
-    existingTask.Done = done
-    if err := s.repo.Update(existingTask); err != nil {
+    if err := s.repo.MarkAsDone(id); err != nil {
         return nil, fmt.Errorf("failed to update task status: %w", err)
     }
 
