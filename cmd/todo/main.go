@@ -26,6 +26,9 @@ func main() {
 		log.Fatalf("Error loading environment variables: %v", err)
 	}
 
+	fmt.Printf("setting up CORS...\n")
+	r.Use(middleware.CORSMiddleware(envVars))
+
 	fmt.Printf("verify data layer availability...\n")
 	db, err := config.CheckDataLayerAvailability(envVars)
 	if err != nil {
