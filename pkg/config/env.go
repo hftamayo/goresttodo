@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -19,6 +20,7 @@ type EnvVars struct {
 	timeOut  int
 	seedDev  bool
 	seedProd bool
+    FeOrigins []string
 }
 
 func LoadEnvVars() (*EnvVars, error) {
@@ -44,6 +46,13 @@ func LoadEnvVars() (*EnvVars, error) {
     seedDev, _ := strconv.ParseBool(getEnv("SEED_DEVELOPMENT", "false"))
     seedProd, _ := strconv.ParseBool(getEnv("SEED_PRODUCTION", "false"))
 
+    originsStr := getEnv("FRONTEND_ORIGINS", "http://localhost:5173")
+    origins := strings.Split(originsStr, ",")
+
+    for i := range origins {
+        origins[i] = strings.TrimSpace(origins[i])
+    }    
+
     envVars := &EnvVars{
         Host:     getEnv("POSTGRES_HOST", "localhost"),
         Port:     port,
@@ -55,6 +64,7 @@ func LoadEnvVars() (*EnvVars, error) {
         timeOut:  30,
         seedDev:  seedDev,
         seedProd: seedProd,
+        FeOrigins: origins,
     }
 
     if envVars.Password == "" {
