@@ -132,6 +132,7 @@ func (r *TaskRepositoryImpl) Update(id int, task *models.Task) (*models.Task, er
     }
 
     task.Owner = existingTask.Owner
+    task.UpdatedAt = time.Now()
 
     tx := r.db.Begin()
     if err := tx.Save(task).Error; err != nil {
@@ -155,7 +156,11 @@ func (r *TaskRepositoryImpl) Update(id int, task *models.Task) (*models.Task, er
 
 func (r *TaskRepositoryImpl) MarkAsDone(id int) (*models.Task, error) {
     var task models.Task
-    result := r.db.Model(&models.Task{}).Where("id = ?", id).Update("done", true)
+    result := r.db.Model(&models.Task{}).Where("id = ?", id).Updates(map[string]interface{}{
+        "done":       true,
+        "updated_at": time.Now(),
+    })
+    
     if result.Error != nil {
         return nil, fmt.Errorf("failed to mark task as done: %w", result.Error)
     }
