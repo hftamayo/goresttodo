@@ -7,8 +7,6 @@ import (
 
 const (
     basePath    = "/tasks/task"
-    taskIDPath  = basePath + "/:id"
-    taskDonePath = taskIDPath + "/done"
 )
 
 func SetupTaskRoutes(r *gin.Engine, handler *task.Handler) {
