@@ -1,7 +1,6 @@
 package routes
 
 import (
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/hftamayo/gotodo/api/v1/errorlog"
 	"github.com/hftamayo/gotodo/api/v1/health"
@@ -12,8 +11,7 @@ import (
 )
 
 func SetupRouter(r *gin.Engine, db *gorm.DB, redisClient *redis.Client, cache *utils.Cache) {
-	setupCORS(r)
-
+	
 	logRepo := errorlog.NewErrorLogRepositoryImpl(redisClient)
 	taskRepo := task.NewTaskRepositoryImpl(db)
 
@@ -25,13 +23,4 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, redisClient *redis.Client, cache *u
 
 	SetupTaskRoutes(r, taskHandler)
 	SetupHealthCheckRoutes(r, healthHandler)
-}
-
-func setupCORS(r *gin.Engine) {
-    r.Use(cors.New(cors.Config{
-        AllowOrigins:     []string{"http://localhost:5173"},
-        AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "PATCH"},
-        AllowHeaders:     []string{"Origin, Content-Type, Accept"},
-        AllowCredentials: true,
-    }))
 }

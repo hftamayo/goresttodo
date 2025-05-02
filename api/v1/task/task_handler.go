@@ -38,7 +38,7 @@ func NewHandler(service TaskServiceInterface, errorLogService *errorlog.ErrorLog
 	return &Handler{
         service:         service,
         errorLogService: errorLogService,
-        cache:          cache,
+        cache:           cache,
 	}
 }
 
@@ -46,11 +46,11 @@ func (h *Handler) List(c *gin.Context) {
     var query CursorPaginationQuery
     if err := c.ShouldBindQuery(&query); err != nil {
         h.errorLogService.LogError("Task_list_validation", err)
-        c.JSON(http.StatusBadRequest, gin.H{
-            "code":          http.StatusBadRequest,
-            "resultMessage": utils.OperationFailed,
-            "error":        ErrInvalidPaginationParams,
-        })
+        c.JSON(http.StatusBadRequest, NewErrorResponse(
+            http.StatusBadRequest,
+            utils.OperationFailed,
+            ErrInvalidPaginationParams,
+        ))
         return
     }
 
@@ -64,26 +64,37 @@ func (h *Handler) List(c *gin.Context) {
     tasks, nextCursor, totalCount, err := h.service.List(query.Cursor, query.Limit)
     if err != nil {
         h.errorLogService.LogError("Task_list", err)
-        c.JSON(http.StatusInternalServerError, gin.H{
-            "code":          http.StatusInternalServerError,
-            "resultMessage": utils.OperationFailed,
-        })
+        c.JSON(http.StatusInternalServerError, NewErrorResponse(
+            http.StatusInternalServerError,
+            utils.OperationFailed,
+            "Failed to fetch tasks",
+        ))
         return
     }
 
-    c.JSON(http.StatusOK, gin.H{
-        "code":          http.StatusOK,
-        "resultMessage": utils.OperationSuccess,
-        "tasks": gin.H{
-            "tasks": TasksToResponse(tasks),
-            "pagination": gin.H{
-                "nextCursor":     nextCursor,
-                "limit": query.Limit,
-                "totalCount": totalCount,
-                "hasMore":        nextCursor != "",
-            },
+    listResponse := TaskListResponse{
+        Tasks: TasksToResponse(tasks),
+        Pagination: struct {
+            NextCursor string `json:"nextCursor"`
+            Limit     int    `json:"limit"`
+            TotalCount int64  `json:"totalCount"`
+            HasMore   bool   `json:"hasMore"`
+        }{
+            NextCursor: nextCursor,
+            Limit:     query.Limit,
+            TotalCount: totalCount,
+            HasMore:   nextCursor != "",
         },
-    })
+    }
+
+    response := TaskOperationResponse{
+        Code:          http.StatusOK,
+        ResultMessage: utils.OperationSuccess,
+        Data:         listResponse,
+    }    
+
+
+    c.JSON(http.StatusOK, response)
 }
 
 
@@ -92,91 +103,107 @@ func (h *Handler) ListById(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		h.errorLogService.LogError("Task_list_by_id", err)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code":          http.StatusBadRequest,
-			"resultMessage": utils.OperationFailed,
-			"error":        ErrInvalidID,
-		})
-		return
-	}
+        c.JSON(http.StatusBadRequest, NewErrorResponse(
+            http.StatusBadRequest,
+            utils.OperationFailed,
+            ErrInvalidID,
+        ))
+        return
+    }
+
 	task, err := h.service.ListById(id)
-	if err != nil {
-		h.errorLogService.LogError("Task_list_by_id", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":          http.StatusInternalServerError,
-			"resultMessage": utils.OperationFailed,
-		})
-		return
-	}
+    if err != nil {
+        h.errorLogService.LogError("Task_list_by_id", err)
+        c.JSON(http.StatusInternalServerError, NewErrorResponse(
+            http.StatusInternalServerError,
+            utils.OperationFailed,
+            "Failed to fetch task",
+        ))
+        return
+    }
 
     if task == nil {
         c.JSON(http.StatusNotFound, gin.H{
-            "code":          http.StatusNotFound,
+            "code": http.StatusNotFound,
             "resultMessage": utils.OperationFailed,
             "error":        ErrTaskNotFound,
         })
         return
     }
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":          http.StatusOK,
-		"resultMessage": utils.OperationSuccess,
-		"task":         ToTaskResponse(task),
-	})
+    if task == nil {
+        c.JSON(http.StatusNotFound, NewErrorResponse(
+            http.StatusNotFound,
+            utils.OperationFailed,
+            ErrTaskNotFound,
+        ))
+        return
+    }
+
+    response := TaskOperationResponse{
+        Code:          http.StatusOK,
+        ResultMessage: utils.OperationSuccess,
+        Data:          ToTaskResponse(task),
+    }
+    c.JSON(http.StatusOK, response)
 }
 
 func (h *Handler) Create(c *gin.Context) {
 	var createRequest CreateTaskRequest
 	if err := c.ShouldBindJSON(&createRequest); err != nil {
 		h.errorLogService.LogError("Task_create", err)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code":          http.StatusBadRequest,
-			"resultMessage": utils.OperationFailed,
-			"error":        ErrInvalidRequest,
-		})
-		return
-	}
-    task := &models.Task{
-        Title:       createRequest.Title,
-        Description: createRequest.Description,
-        Owner:       createRequest.Owner,
-    }
-
-    if err := h.service.Create(task); err != nil {
-        h.errorLogService.LogError("Task_create", err)
-        c.JSON(http.StatusInternalServerError, gin.H{
-            "code":          http.StatusInternalServerError,
-            "resultMessage": utils.OperationFailed,
-        })
+        c.JSON(http.StatusBadRequest, NewErrorResponse(
+            http.StatusBadRequest,
+            utils.OperationFailed,
+            ErrInvalidRequest,
+        ))
         return
     }
 
-    c.JSON(http.StatusCreated, gin.H{
-        "code":          http.StatusCreated,
-        "resultMessage": utils.OperationSuccess,
-        "task":         ToTaskResponse(task),
-    })
+    task := &models.Task{
+        Title:       createRequest.Title,
+        Owner:       createRequest.Owner,
+    }
+
+    createdTask, err := h.service.Create(task)
+    if err != nil {
+        h.errorLogService.LogError("Task_create", err)
+        c.JSON(http.StatusInternalServerError, NewErrorResponse(
+            http.StatusInternalServerError,
+            utils.OperationFailed,
+            "Failed to create task",
+        ))
+        return
+    }
+
+    response := TaskOperationResponse{
+        Code:          http.StatusCreated,
+        ResultMessage: utils.OperationSuccess,
+        Data:          ToTaskResponse(createdTask),
+    }
+    c.JSON(http.StatusCreated, response)
 }
 
 func (h *Handler) Update(c *gin.Context) {
     id, err := strconv.Atoi(c.Param("id"))
     if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{
-            "code":          http.StatusBadRequest,
-            "resultMessage": utils.OperationFailed,
-            "error":        ErrInvalidID,
-        })
+        h.errorLogService.LogError("Task_update_id", err)
+        c.JSON(http.StatusBadRequest, NewErrorResponse(
+            http.StatusBadRequest,
+            utils.OperationFailed,
+            ErrInvalidID,
+        ))
         return
     }
 
     var updateRequest UpdateTaskRequest
     if err := c.ShouldBindJSON(&updateRequest); err != nil {
 		h.errorLogService.LogError("Task_update_binding", err)
-        c.JSON(http.StatusBadRequest, gin.H{
-            "code":          http.StatusBadRequest,
-            "resultMessage": utils.OperationFailed,
-            "error":        "Invalid request body",
-        })
+        c.JSON(http.StatusBadRequest, NewErrorResponse(
+            http.StatusBadRequest,
+            utils.OperationFailed,
+            ErrInvalidRequest,
+        ))
         return
     }
 
@@ -184,63 +211,57 @@ func (h *Handler) Update(c *gin.Context) {
         Model:       gorm.Model{ID: uint(id)},
         Title:       updateRequest.Title,
         Description: updateRequest.Description,
-    }	
+    }
 
-    if err := h.service.Update(task); err != nil {
+    updatedTask, err := h.service.Update(id, task)
+    if err != nil {
         h.errorLogService.LogError("Task_update", err)
-        c.JSON(http.StatusInternalServerError, gin.H{
-            "code":          http.StatusInternalServerError,
-            "resultMessage": utils.OperationFailed,
-        })
+        c.JSON(http.StatusInternalServerError, NewErrorResponse(
+            http.StatusInternalServerError,
+            utils.OperationFailed,
+            "Failed to update task",
+        ))
         return
     }
 
-    c.JSON(http.StatusOK, gin.H{
-        "code":          http.StatusOK,
-        "resultMessage": utils.OperationSuccess,
-        "task":         ToTaskResponse(task),
-    })
+    response := TaskOperationResponse{
+        Code:          http.StatusOK,
+        ResultMessage: utils.OperationSuccess,
+        Data:          ToTaskResponse(updatedTask),
+    }
+    c.JSON(http.StatusOK, response)
 }
 
 func (h *Handler) Done(c *gin.Context) {
 	// Parse the ID from the URL parameter.
 	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		h.errorLogService.LogError("Task_done", err)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code":          http.StatusBadRequest,
-			"resultMessage": utils.OperationFailed,
-			"error":        ErrInvalidID,
-		})
-		return
-	}
-
-    var doneRequest DoneTaskRequest
-    if err := c.ShouldBindJSON(&doneRequest); err != nil {
-        h.errorLogService.LogError("Task_done_binding", err)
-        c.JSON(http.StatusBadRequest, gin.H{
-            "code":          http.StatusBadRequest,
-            "resultMessage": utils.OperationFailed,
-            "error":        ErrInvalidRequest,
-        })
-        return
-    }
-
-    task, err := h.service.Done(id, doneRequest.Done)
     if err != nil {
         h.errorLogService.LogError("Task_done", err)
-        c.JSON(http.StatusInternalServerError, gin.H{
-            "code":          http.StatusInternalServerError,
-            "resultMessage": utils.OperationFailed,
-        })
+        c.JSON(http.StatusBadRequest, NewErrorResponse(
+            http.StatusBadRequest,
+            utils.OperationFailed,
+            ErrInvalidID,
+        ))
         return
     }
 
-    c.JSON(http.StatusOK, gin.H{
-        "code":          http.StatusOK,
-        "resultMessage": utils.OperationSuccess,
-        "task":         ToTaskResponse(task),
-    })
+    updatedTask, err := h.service.MarkAsDone(id)
+    if err != nil {
+        h.errorLogService.LogError("Task_done", err)
+        c.JSON(http.StatusInternalServerError, NewErrorResponse(
+            http.StatusInternalServerError,
+            utils.OperationFailed,
+            "Failed to mark task as done",
+        ))
+        return
+    }
+
+    response := TaskOperationResponse{
+        Code:          http.StatusOK,
+        ResultMessage: utils.OperationSuccess,
+        Data:          ToTaskResponse(updatedTask),
+    }
+    c.JSON(http.StatusOK, response)
 }
 
 func (h *Handler) Delete(c *gin.Context) {
@@ -248,25 +269,26 @@ func (h *Handler) Delete(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		h.errorLogService.LogError("Task_delete", err)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code":          http.StatusBadRequest,
-			"resultMessage": utils.OperationFailed,
-			"error":        ErrInvalidID,
-		})
-		return
-	}
+        c.JSON(http.StatusBadRequest, NewErrorResponse(
+            http.StatusBadRequest,
+            utils.OperationFailed,
+            ErrInvalidID,
+        ))
+        return
+    }
 
     if err := h.service.Delete(id); err != nil {
         h.errorLogService.LogError("Task_delete", err)
-        c.JSON(http.StatusInternalServerError, gin.H{
-            "code":          http.StatusInternalServerError,
-            "resultMessage": utils.OperationFailed,
-        })
+        c.JSON(http.StatusInternalServerError, NewErrorResponse(
+            http.StatusInternalServerError,
+            utils.OperationFailed,
+            "Failed to delete task",
+        ))
         return
     }
 
     c.JSON(http.StatusOK, gin.H{
-        "code":          http.StatusOK,
+        "code": http.StatusOK,
         "resultMessage": utils.OperationSuccess,
     })
 }

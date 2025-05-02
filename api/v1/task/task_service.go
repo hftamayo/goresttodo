@@ -93,45 +93,55 @@ func (s *TaskService) ListById(id int) (*models.Task, error) {
     return task, nil
 }
 
-func (s *TaskService) Create(task *models.Task) error {
+func (s *TaskService) Create(task *models.Task) (*models.Task, error) {
     if task == nil {
-        return fmt.Errorf("invalid task data")
+        return nil, fmt.Errorf("invalid task data")
     }
 
-    if err := s.repo.Create(task); err != nil {
-        return fmt.Errorf("failed to create task: %w", err)
+    createdTask, err := s.repo.Create(task)
+    if err != nil {
+        return nil, fmt.Errorf("failed to create task: %w", err)
     }
 
     // Invalidate list cache
     s.cache.Delete("tasks_list*")
-    return nil
+    return createdTask, nil
 }
 
-func (s *TaskService) Update(task *models.Task) error {
+func (s *TaskService) Update(id int, task *models.Task) (*models.Task, error) {
     if task == nil {
-        return fmt.Errorf("invalid task data")
+        return nil, fmt.Errorf("invalid task data")
     }
 
-    existingTask, err := s.repo.ListById(int(task.ID))
+    if int(task.ID) != id {
+        return nil, fmt.Errorf("inconsistent task ID between URL and body")
+    }    
+
+    existingTask, err := s.repo.ListById(id)
     if err != nil {
-        return fmt.Errorf("failed to verify task existence: %w", err)
+        return nil, fmt.Errorf("failed to verify task existence: %w", err)
     }
 
     if existingTask == nil {
-        return fmt.Errorf("task with id %d not found", task.ID)
+        return nil, fmt.Errorf("task with id %d not found", task.ID)
     }
 
-    if err := s.repo.Update(task); err != nil {
-        return fmt.Errorf("failed to update task: %w", err)
+    // Prevent modification of immutable fields
+    task.ID = uint(id)
+    task.CreatedAt = existingTask.CreatedAt    
+
+    updatedTask, err := s.repo.Update(id, task)
+     if err != nil {
+        return nil, fmt.Errorf("failed to update task: %w", err)
     }
 
     // Invalidate caches
     s.cache.Delete(fmt.Sprintf("task_%d", task.ID))
     s.cache.Delete("tasks_list*")
-    return nil
+    return updatedTask, nil
 }
 
-func (s *TaskService) Done(id int, done bool) (*models.Task, error) {
+func (s *TaskService) MarkAsDone(id int) (*models.Task, error) {
     existingTask, err := s.repo.ListById(id)
     if err != nil {
         return nil, fmt.Errorf("failed to get task: %w", err)
@@ -141,15 +151,15 @@ func (s *TaskService) Done(id int, done bool) (*models.Task, error) {
         return nil, fmt.Errorf("task with id %d not found", id)
     }
 
-    existingTask.Done = done
-    if err := s.repo.Update(existingTask); err != nil {
-        return nil, fmt.Errorf("failed to update task status: %w", err)
+    updatedTask, err := s.repo.MarkAsDone(id)
+    if err != nil {
+        return nil, fmt.Errorf("failed to mark task as done: %w", err)
     }
 
     // Invalidate caches
     s.cache.Delete(fmt.Sprintf("task_%d", id))
     s.cache.Delete("tasks_list*")
-    return existingTask, nil
+    return updatedTask, nil
 }
 
 func (s *TaskService) Delete(id int) error {

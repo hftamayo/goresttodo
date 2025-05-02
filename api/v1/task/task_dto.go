@@ -8,17 +8,12 @@ import (
 
 type CreateTaskRequest struct {
     Title       string `json:"title" binding:"required"`
-    Description string `json:"description" binding:"required"`
     Owner       uint   `json:"owner" binding:"required"`
 }
 
 type UpdateTaskRequest struct {
     Title       string `json:"title" binding:"required"`
     Description string `json:"description" binding:"required"`
-}
-
-type DoneTaskRequest struct {
-    Done bool `json:"done" binding:"required"`
 }
 
 type CursorPaginationQuery struct {
@@ -37,6 +32,8 @@ type TaskListResponse struct {
     Pagination struct {
         NextCursor string `json:"nextCursor"`
         Limit     int    `json:"limit"`
+        TotalCount int64  `json:"totalCount"`
+        HasMore    bool   `json:"hasMore"`
     } `json:"pagination"`
 }
 
@@ -50,6 +47,18 @@ type TaskResponse struct {
     UpdatedAt   time.Time `json:"updatedAt"`    
 }
 
+type TaskOperationResponse struct {
+    Code          int           `json:"code"`
+    ResultMessage string        `json:"resultMessage"`
+    Data          interface{} `json:"data"`
+}
+
+type ErrorResponse struct {
+    Code          int    `json:"code"`
+    ResultMessage string `json:"resultMessage"`
+    Error         string `json:"error,omitempty"`
+}
+
 func ToTaskResponse(task *models.Task) *TaskResponse {
     return &TaskResponse{
         ID:          task.ID,
@@ -57,6 +66,8 @@ func ToTaskResponse(task *models.Task) *TaskResponse {
         Description: task.Description,
         Done:        task.Done,
         Owner:       task.Owner,
+        CreatedAt:   task.CreatedAt,
+        UpdatedAt:   task.UpdatedAt,
     }
 }
 
@@ -66,4 +77,12 @@ func TasksToResponse(tasks []*models.Task) []*TaskResponse {
         taskResponses[i] = ToTaskResponse(task)
     }
     return taskResponses
+}
+
+func NewErrorResponse(code int, resultMessage string, err string) *ErrorResponse {
+    return &ErrorResponse{
+        Code:          code,
+        ResultMessage: resultMessage,
+        Error:         err,
+    }
 }
