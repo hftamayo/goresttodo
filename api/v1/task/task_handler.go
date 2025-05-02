@@ -162,8 +162,7 @@ func (h *Handler) Create(c *gin.Context) {
 
     task := &models.Task{
         Title:       createRequest.Title,
-        //Owner:       createRequest.Owner,
-        Owner:       1, 
+        Owner:       createRequest.Owner,
     }
 
     createdTask, err := h.service.Create(task)
