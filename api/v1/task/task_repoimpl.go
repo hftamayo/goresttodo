@@ -3,7 +3,6 @@ package task
 import (
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/hftamayo/gotodo/api/v1/models"
 	"github.com/hftamayo/gotodo/pkg/cursor"
@@ -107,10 +106,6 @@ func (r *TaskRepositoryImpl) Create(task *models.Task) (*models.Task, error) {
     if task == nil {
         return nil, errors.New("task cannot be nil")
     }
-
-    task.Done = false
-    task.CreatedAt = time.Now()
-    task.UpdatedAt = time.Now()
 	
 	if result := r.db.Create(task); result.Error != nil {
 		return nil, result.Error
@@ -132,7 +127,6 @@ func (r *TaskRepositoryImpl) Update(id int, task *models.Task) (*models.Task, er
     }
 
     task.Owner = existingTask.Owner
-    task.UpdatedAt = time.Now()
 
     tx := r.db.Begin()
     if err := tx.Save(task).Error; err != nil {
@@ -158,7 +152,6 @@ func (r *TaskRepositoryImpl) MarkAsDone(id int) (*models.Task, error) {
     var task models.Task
     result := r.db.Model(&models.Task{}).Where("id = ?", id).Updates(map[string]interface{}{
         "done":       true,
-        "updated_at": time.Now(),
     })
     
     if result.Error != nil {
