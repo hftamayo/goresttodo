@@ -3,6 +3,7 @@ package task
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/hftamayo/gotodo/api/v1/models"
 	"github.com/hftamayo/gotodo/pkg/cursor"
@@ -106,6 +107,10 @@ func (r *TaskRepositoryImpl) Create(task *models.Task) (*models.Task, error) {
     if task == nil {
         return nil, errors.New("task cannot be nil")
     }
+
+    task.Done = false
+    task.CreatedAt = time.Now()
+    task.UpdatedAt = time.Now()
 	
 	if result := r.db.Create(task); result.Error != nil {
 		return nil, result.Error
