@@ -8,7 +8,6 @@ import (
 
 type CreateTaskRequest struct {
     Title       string `json:"title" binding:"required"`
-    Description string `json:"description" binding:"required"`
     Owner       uint   `json:"owner" binding:"required"`
 }
 
