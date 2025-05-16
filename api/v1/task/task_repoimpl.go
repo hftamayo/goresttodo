@@ -13,11 +13,6 @@ type TaskRepositoryImpl struct {
 	db *gorm.DB
 }
 
-const (
-    defaultLimit = 10
-    maxLimit    = 100
-)
-
 func NewTaskRepositoryImpl(db *gorm.DB) TaskRepository {
 	if db == nil {
 		fmt.Errorf("database connection is required")
@@ -38,15 +33,15 @@ func (r *TaskRepositoryImpl) GetTotalCount() (int64, error) {
 
 func (r *TaskRepositoryImpl) List(limit int, cursorStr string, order string) ([]*models.Task, string, string, error) {
     if limit <= 0 {
-        limit = defaultLimit
+        limit = DefaultLimit
     }
-    if limit > maxLimit {
-        limit = maxLimit
+    if limit > MaxLimit {
+        limit = MaxLimit
     }
 
     // Default order if not provided
     if order == "" {
-        order = "DESC"
+        order = DefaultOrder
     }
 
     query := r.db.Model(&models.Task{}).
