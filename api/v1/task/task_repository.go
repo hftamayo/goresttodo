@@ -5,7 +5,7 @@ import (
 )
 
 type TaskRepository interface {
-	List(limit int, cursor string) ([]*models.Task, string, error)
+    List(limit int, cursor string, order string) ([]*models.Task, string, string, error)
 	ListById(id int) (*models.Task, error)
 	Create(task *models.Task) (*models.Task, error)
 	Update(id int, task *models.Task)(*models.Task, error)
