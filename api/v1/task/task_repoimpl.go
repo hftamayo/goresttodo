@@ -73,7 +73,10 @@ func (r *TaskRepositoryImpl) List(limit int, cursorStr string, order string) ([]
     hasMore := len(tasks) > limit
 
     if hasMore {
+        // Get the last item before removing it
         lastTask := tasks[len(tasks)-1]
+        tasks = tasks[:limit] // Remove the extra item
+
         c := cursor.Cursor[uint]{
             ID:        lastTask.ID,
             Timestamp: lastTask.CreatedAt,
@@ -82,7 +85,6 @@ func (r *TaskRepositoryImpl) List(limit int, cursorStr string, order string) ([]
             Field:     "created_at",
             Direction: order,
         })
-        tasks = tasks[:limit]
     }
 
     // Generate previous cursor from first item
