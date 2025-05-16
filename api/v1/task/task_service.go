@@ -24,7 +24,7 @@ var _ TaskServiceInterface = (*TaskService)(nil)
 
 var cachedData struct {
     Tasks      []*models.Task        `json:"tasks"`
-    Pagination CursorPaginationMeta  `json:"pagination"`
+    Pagination PaginationMeta  `json:"pagination"`
     TotalCount int64          `json:"totalCount"`
 }
 
@@ -32,35 +32,44 @@ func NewTaskService(repo TaskRepository, cache *utils.Cache) TaskServiceInterfac
 	return &TaskService{repo: repo, cache: cache}
 }
 
-func (s *TaskService) List(cursor string, limit int) ([]*models.Task, string, int64, error) {
+func (s *TaskService) List(cursor string, limit int, order string) ([]*models.Task, string, string, int64, error) {
     // Try to get from cache first
-    cacheKey := fmt.Sprintf("tasks_cursor_%s_limit_%d", cursor, limit)
+    cacheKey := fmt.Sprintf("tasks_cursor_%s_limit_%d_order_%s", cursor, limit, order)
     if err := s.cache.Get(cacheKey, &cachedData); err == nil {
-        return cachedData.Tasks, cachedData.Pagination.NextCursor, cachedData.TotalCount, nil
+        return cachedData.Tasks, cachedData.Pagination.NextCursor, cachedData.Pagination.PrevCursor, cachedData.TotalCount, nil
     }
 
     // Get from repository
-    tasks, nextCursor, err := s.repo.List(limit, cursor)
+    tasks, nextCursor, prevCursor, err := s.repo.List(limit, cursor, order)
     if err != nil {
-        return nil, "", 0, fmt.Errorf("failed to list tasks: %w", err)
+        return nil, "", "", 0, fmt.Errorf("failed to list tasks: %w", err)
     }
 
     // Get total count
     totalCount, err := s.repo.GetTotalCount()
     if err != nil {
-        return nil, "", 0, fmt.Errorf("failed to get total count: %w", err)
+        return nil, "", "", 0, fmt.Errorf("failed to get total count: %w", err)
+    }
+
+    // Calculate current page
+    currentPage := 1
+    if cursor != "" {
+        currentPage = int(totalCount/int64(limit)) + 1
     }
 
     cacheData := struct {
-        Tasks      []*models.Task       `json:"tasks"`
-        Pagination CursorPaginationMeta `json:"pagination"`
-        TotalCount int64               `json:"totalCount"`
+        Tasks      []*models.Task  `json:"tasks"`
+        Pagination PaginationMeta  `json:"pagination"`
+        TotalCount int64          `json:"totalCount"`
     }{
         Tasks: tasks,
-        Pagination: CursorPaginationMeta{
-            NextCursor: nextCursor,
-            HasMore:    nextCursor != "",
-            Count:      len(tasks),
+        Pagination: PaginationMeta{
+            NextCursor:  nextCursor,
+            PrevCursor:  prevCursor,
+            HasMore:     nextCursor != "",
+            Limit:       limit,
+            TotalCount:  totalCount,
+            CurrentPage: currentPage,
         },
         TotalCount: totalCount,
     }
@@ -69,7 +78,7 @@ func (s *TaskService) List(cursor string, limit int) ([]*models.Task, string, in
         s.cache.Set(cacheKey, string(cacheBytes), defaultCacheTime)
     }
 
-    return tasks, nextCursor, totalCount, nil
+    return tasks, nextCursor, prevCursor, totalCount, nil
 }
 
 func (s *TaskService) ListById(id int) (*models.Task, error) {
