@@ -36,7 +36,7 @@ func (r *TaskRepositoryImpl) GetTotalCount() (int64, error) {
     return count, nil
 }
 
-func (r *TaskRepositoryImpl) List(limit int, cursorStr string) ([]*models.Task, string, error) {
+func (r *TaskRepositoryImpl) List(limit int, cursorStr string, order string) ([]*models.Task, string, string, error) {
     if limit <= 0 {
         limit = defaultLimit
     }
@@ -44,28 +44,37 @@ func (r *TaskRepositoryImpl) List(limit int, cursorStr string) ([]*models.Task, 
         limit = maxLimit
     }
 
+    // Default order if not provided
+    if order == "" {
+        order = "DESC"
+    }
+
     query := r.db.Model(&models.Task{}).
-    Order("created_at DESC, id DESC").
-    Select("id, title, description, done, owner, created_at, updated_at")
-    // If cursor is provided, decode and apply conditions
+        Order(fmt.Sprintf("created_at %s, id %s", order, order)).
+        Select("id, title, description, done, owner, created_at, updated_at")
+
     if cursorStr != "" {
         c, err := cursor.Decode[uint](cursorStr)
         if err != nil {
-            return nil, "", fmt.Errorf("invalid cursor: %w", err)
+            return nil, "", "", fmt.Errorf("invalid cursor: %w", err)
         }
-        
-        query = query.Where("(created_at < ?) OR (created_at = ? AND id < ?)", 
-            c.Timestamp, 
-            c.Timestamp, 
-            c.ID)
+
+        // Adjust conditions based on order
+        if order == "DESC" {
+            query = query.Where("(created_at < ?) OR (created_at = ? AND id < ?)", 
+                c.Timestamp, c.Timestamp, c.ID)
+        } else {
+            query = query.Where("(created_at > ?) OR (created_at = ? AND id > ?)", 
+                c.Timestamp, c.Timestamp, c.ID)
+        }
     }
 
     var tasks []*models.Task
     if err := query.Limit(limit + 1).Find(&tasks).Error; err != nil {
-        return nil, "", fmt.Errorf("failed to fetch tasks: %w", err)
+        return nil, "", "", fmt.Errorf("failed to fetch tasks: %w", err)
     }
 
-    var nextCursor string
+    var nextCursor, prevCursor string
     hasMore := len(tasks) > limit
 
     if hasMore {
@@ -76,12 +85,25 @@ func (r *TaskRepositoryImpl) List(limit int, cursorStr string) ([]*models.Task, 
         }
         nextCursor, _ = cursor.Encode(c, cursor.Options{
             Field:     "created_at",
-            Direction: "DESC",
+            Direction: order,
         })
         tasks = tasks[:limit]
     }
 
-    return tasks, nextCursor, nil
+    // Generate previous cursor from first item
+    if len(tasks) > 0 {
+        firstTask := tasks[0]
+        c := cursor.Cursor[uint]{
+            ID:        firstTask.ID,
+            Timestamp: firstTask.CreatedAt,
+        }
+        prevCursor, _ = cursor.Encode(c, cursor.Options{
+            Field:     "created_at",
+            Direction: order,
+        })
+    }
+
+    return tasks, nextCursor, prevCursor, nil
 }
 
 
