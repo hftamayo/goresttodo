@@ -1,8 +1,11 @@
 package task
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hftamayo/gotodo/api/v1/errorlog"
@@ -11,11 +14,12 @@ import (
 	"gorm.io/gorm"
 )
 
-const (
-    ErrInvalidID = "Invalid ID parameter"
-    ErrTaskNotFound = "Task not found"
-    ErrInvalidRequest = "Invalid request body"
-    ErrInvalidPaginationParams = "Invalid pagination parameters"
+var (
+    ErrInvalidID = errors.New("invalid ID parameter")
+    ErrTaskNotFound = errors.New("task not found")
+    ErrInvalidRequest = errors.New("invalid request body")
+    ErrInvalidPaginationParams = errors.New("invalid pagination parameters")
+    ErrInvalidCursor = errors.New("invalid cursor")
 )
 
 type Handler struct {
@@ -35,11 +39,11 @@ func NewHandler(service TaskServiceInterface, errorLogService *errorlog.ErrorLog
         panic("cache is required")
     }
 
-	return &Handler{
+    return &Handler{
         service:         service,
         errorLogService: errorLogService,
-        cache:           cache,
-	}
+        cache:          cache,
+    }
 }
 
 func (h *Handler) List(c *gin.Context) {
@@ -49,54 +53,45 @@ func (h *Handler) List(c *gin.Context) {
         c.JSON(http.StatusBadRequest, NewErrorResponse(
             http.StatusBadRequest,
             utils.OperationFailed,
-            ErrInvalidPaginationParams,
+            ErrInvalidPaginationParams.Error(),
         ))
         return
     }
 
-    if query.Limit <= 0 {
-        query.Limit = defaultLimit
-    }
-    if query.Limit > maxLimit {
-        query.Limit = maxLimit
-    }    
+    // Validate and set defaults
+    query = validatePaginationQuery(query)
 
-    tasks, nextCursor, totalCount, err := h.service.List(query.Cursor, query.Limit)
+    // Try to get from cache
+    cacheKey := fmt.Sprintf("tasks_list_%s_%d_%s", query.Cursor, query.Limit, query.Order)
+    var cachedResponse TaskOperationResponse
+    if err := h.cache.Get(cacheKey, &cachedResponse); err == nil {
+        c.JSON(http.StatusOK, cachedResponse)
+        return
+    }
+
+    tasks, nextCursor, prevCursor, totalCount, err := h.service.List(query.Cursor, query.Limit, query.Order)
     if err != nil {
         h.errorLogService.LogError("Task_list", err)
-        c.JSON(http.StatusInternalServerError, NewErrorResponse(
-            http.StatusInternalServerError,
+        statusCode := http.StatusInternalServerError
+        if errors.Is(err, ErrInvalidCursor) {
+            statusCode = http.StatusBadRequest
+        }
+        c.JSON(statusCode, NewErrorResponse(
+            statusCode,
             utils.OperationFailed,
-            "Failed to fetch tasks",
+            err.Error(),
         ))
         return
     }
 
-    listResponse := TaskListResponse{
-        Tasks: TasksToResponse(tasks),
-        Pagination: struct {
-            NextCursor string `json:"nextCursor"`
-            Limit     int    `json:"limit"`
-            TotalCount int64  `json:"totalCount"`
-            HasMore   bool   `json:"hasMore"`
-        }{
-            NextCursor: nextCursor,
-            Limit:     query.Limit,
-            TotalCount: totalCount,
-            HasMore:   nextCursor != "",
-        },
-    }
+    // Build response
+    response := buildListResponse(tasks, query, nextCursor, prevCursor, totalCount)
 
-    response := TaskOperationResponse{
-        Code:          http.StatusOK,
-        ResultMessage: utils.OperationSuccess,
-        Data:         listResponse,
-    }    
-
+    // Cache the response
+    h.cache.Set(cacheKey, response, time.Hour)
 
     c.JSON(http.StatusOK, response)
 }
-
 
 func (h *Handler) ListById(c *gin.Context) {
 	// Parse the ID from the URL parameter.
@@ -106,7 +101,7 @@ func (h *Handler) ListById(c *gin.Context) {
         c.JSON(http.StatusBadRequest, NewErrorResponse(
             http.StatusBadRequest,
             utils.OperationFailed,
-            ErrInvalidID,
+            ErrInvalidID.Error(),
         ))
         return
     }
@@ -135,7 +130,7 @@ func (h *Handler) ListById(c *gin.Context) {
         c.JSON(http.StatusNotFound, NewErrorResponse(
             http.StatusNotFound,
             utils.OperationFailed,
-            ErrTaskNotFound,
+            ErrTaskNotFound.Error(),
         ))
         return
     }
@@ -155,7 +150,7 @@ func (h *Handler) Create(c *gin.Context) {
         c.JSON(http.StatusBadRequest, NewErrorResponse(
             http.StatusBadRequest,
             utils.OperationFailed,
-            ErrInvalidRequest,
+            ErrInvalidRequest.Error(),
         ))
         return
     }
@@ -191,7 +186,7 @@ func (h *Handler) Update(c *gin.Context) {
         c.JSON(http.StatusBadRequest, NewErrorResponse(
             http.StatusBadRequest,
             utils.OperationFailed,
-            ErrInvalidID,
+            ErrInvalidID.Error(),
         ))
         return
     }
@@ -202,7 +197,7 @@ func (h *Handler) Update(c *gin.Context) {
         c.JSON(http.StatusBadRequest, NewErrorResponse(
             http.StatusBadRequest,
             utils.OperationFailed,
-            ErrInvalidRequest,
+            ErrInvalidRequest.Error(),
         ))
         return
     }
@@ -240,7 +235,7 @@ func (h *Handler) Done(c *gin.Context) {
         c.JSON(http.StatusBadRequest, NewErrorResponse(
             http.StatusBadRequest,
             utils.OperationFailed,
-            ErrInvalidID,
+            ErrInvalidID.Error(),
         ))
         return
     }
@@ -272,7 +267,7 @@ func (h *Handler) Delete(c *gin.Context) {
         c.JSON(http.StatusBadRequest, NewErrorResponse(
             http.StatusBadRequest,
             utils.OperationFailed,
-            ErrInvalidID,
+            ErrInvalidID.Error(),
         ))
         return
     }
