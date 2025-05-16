@@ -34,25 +34,24 @@ func NewTaskService(repo TaskRepository, cache *utils.Cache) TaskServiceInterfac
 }
 
 func (s *TaskService) List(cursor string, limit int, order string) ([]*models.Task, string, string, int64, error) {
-    // Validate and set defaults
-    if limit <= 0 {
-        limit = DefaultLimit
-    }
-    if limit > MaxLimit {
-        limit = MaxLimit
-    }
-    if order == "" {
-        order = DefaultOrder
-    }
+    // Use the validation helper
+    query := validatePaginationQuery(CursorPaginationQuery{
+        Cursor: cursor,
+        Limit:  limit,
+        Order:  order,
+    })
 
     // Try to get from cache first
-    cacheKey := fmt.Sprintf("tasks_cursor_%s_limit_%d_order_%s", cursor, limit, order)
+    cacheKey := fmt.Sprintf("tasks_cursor_%s_limit_%d_order_%s", 
+        query.Cursor, query.Limit, query.Order)
     if err := s.cache.Get(cacheKey, &cachedData); err == nil {
-        return cachedData.Tasks, cachedData.Pagination.NextCursor, cachedData.Pagination.PrevCursor, cachedData.TotalCount, nil
+        return cachedData.Tasks, cachedData.Pagination.NextCursor, 
+            cachedData.Pagination.PrevCursor, cachedData.TotalCount, nil
     }
 
-    // Get from repository
-    tasks, nextCursor, prevCursor, err := s.repo.List(limit, cursor, order)
+    // Get from repository with extra record for hasMore check
+    tasks, nextCursor, prevCursor, err := s.repo.List(query.Limit+1, 
+        query.Cursor, query.Order)
     if err != nil {
         return nil, "", "", 0, fmt.Errorf("failed to list tasks: %w", err)
     }
@@ -63,14 +62,18 @@ func (s *TaskService) List(cursor string, limit int, order string) ([]*models.Ta
         return nil, "", "", 0, fmt.Errorf("failed to get total count: %w", err)
     }
 
+    // Handle hasMore and slice tasks
+    hasMore := len(tasks) > limit
+    if hasMore {
+        tasks = tasks[:limit] // Remove the extra record
+    }
+
     // Calculate pagination metadata
     currentPage := 1
     if cursor != "" {
         currentPage = int(totalCount/int64(limit)) + 1
     }
-    
     totalPages := int(math.Ceil(float64(totalCount) / float64(limit)))
-    hasMore := len(tasks) == limit && (limit * currentPage) < int(totalCount)
 
     cacheData := struct {
         Tasks      []*models.Task  `json:"tasks"`
