@@ -17,14 +17,18 @@ type UpdateTaskRequest struct {
 }
 
 type CursorPaginationQuery struct {
-    Limit  int    `form:"limit" binding:"required,min=1,max=100"`
     Cursor string `form:"cursor"`
+    Limit  int    `form:"limit"`
+    Order  string `form:"order" binding:"omitempty,oneof=asc desc"` // Add ordering option
 }
 
-type CursorPaginationMeta struct {
-    NextCursor string `json:"nextCursor,omitempty"`
-    HasMore    bool   `json:"hasMore"`
-    Count      int    `json:"count"`
+type PaginationMeta struct {
+    NextCursor  string `json:"nextCursor"`
+    PrevCursor  string `json:"prevCursor,omitempty"` // Add previous cursor
+    Limit       int    `json:"limit"`
+    TotalCount  int64  `json:"totalCount"`
+    HasMore     bool   `json:"hasMore"`
+    CurrentPage int    `json:"currentPage"`
 }
 
 type TaskListResponse struct {
