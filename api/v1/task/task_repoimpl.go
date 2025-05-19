@@ -3,6 +3,7 @@ package task
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/hftamayo/gotodo/api/v1/models"
 	"github.com/hftamayo/gotodo/pkg/cursor"
@@ -55,7 +56,7 @@ func (r *TaskRepositoryImpl) List(limit int, cursorStr string, order string) ([]
         }
 
         // Adjust conditions based on order
-        if order == "DESC" {
+        if order == "desc" {
             query = query.Where("(created_at < ?) OR (created_at = ? AND id < ?)", 
                 c.Timestamp, c.Timestamp, c.ID)
         } else {
@@ -77,27 +78,48 @@ func (r *TaskRepositoryImpl) List(limit int, cursorStr string, order string) ([]
         lastTask := tasks[len(tasks)-1]
         tasks = tasks[:limit] // Remove the extra item
 
+        // Create cursor for the next page
         c := cursor.Cursor[uint]{
             ID:        lastTask.ID,
             Timestamp: lastTask.CreatedAt,
         }
-        nextCursor, _ = cursor.Encode(c, cursor.Options{
+
+        // Debug log
+        fmt.Printf("Generating next cursor for task ID: %d, Timestamp: %v\n", c.ID, c.Timestamp)
+
+        var err error
+        nextCursor, err = cursor.Encode(c, cursor.Options{
             Field:     "created_at",
-            Direction: order,
+            Direction: strings.ToUpper(order),
         })
+        if err != nil {
+            fmt.Printf("Error encoding next cursor: %v\n", err)
+            return nil, "", "", fmt.Errorf("failed to encode next cursor: %w", err)
+        }
+        fmt.Printf("Generated next cursor: %s\n", nextCursor)
     }
 
-    // Generate previous cursor from first item
+    // Generate previous cursor from first item if we have tasks
     if len(tasks) > 0 {
         firstTask := tasks[0]
         c := cursor.Cursor[uint]{
             ID:        firstTask.ID,
             Timestamp: firstTask.CreatedAt,
         }
-        prevCursor, _ = cursor.Encode(c, cursor.Options{
+
+        // Debug log
+        fmt.Printf("Generating prev cursor for task ID: %d, Timestamp: %v\n", c.ID, c.Timestamp)
+
+        var err error
+        prevCursor, err = cursor.Encode(c, cursor.Options{
             Field:     "created_at",
-            Direction: order,
+            Direction: strings.ToUpper(order),
         })
+        if err != nil {
+            fmt.Printf("Error encoding prev cursor: %v\n", err)
+            return nil, "", "", fmt.Errorf("failed to encode previous cursor: %w", err)
+        }
+        fmt.Printf("Generated prev cursor: %s\n", prevCursor)
     }
 
     return tasks, nextCursor, prevCursor, nil
