@@ -203,3 +203,32 @@ func (s *TaskService) Delete(id int) error {
     s.cache.Delete("tasks_cursor_*")
     return nil
 }
+
+func (s *TaskService) ListByPage(page int, limit int, order string) ([]*models.Task, int64, error) {
+    // Try to get from cache first
+    cacheKey := fmt.Sprintf("tasks_page_%d_limit_%d_order_%s", page, limit, order)
+    var cachedData struct {
+        Tasks      []*models.Task `json:"tasks"`
+        TotalCount int64         `json:"totalCount"`
+    }
+    
+    if err := s.cache.Get(cacheKey, &cachedData); err == nil {
+        return cachedData.Tasks, cachedData.TotalCount, nil
+    }
+
+    tasks, totalCount, err := s.repo.ListByPage(page, limit, order)
+    if err != nil {
+        return nil, 0, fmt.Errorf("failed to list tasks by page: %w", err)
+    }
+
+    // Cache the results
+    s.cache.Set(cacheKey, struct {
+        Tasks      []*models.Task `json:"tasks"`
+        TotalCount int64         `json:"totalCount"`
+    }{
+        Tasks:      tasks,
+        TotalCount: totalCount,
+    }, defaultCacheTime)
+
+    return tasks, totalCount, nil
+}

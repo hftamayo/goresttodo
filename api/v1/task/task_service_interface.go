@@ -9,4 +9,5 @@ type TaskServiceInterface interface {
     Update(id int, task *models.Task) (*models.Task, error)
     Delete(id int) error
     MarkAsDone(id int) (*models.Task, error)
+    ListByPage(page int, limit int, order string) ([]*models.Task, int64, error)
 }

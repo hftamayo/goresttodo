@@ -32,6 +32,12 @@ type CursorPaginationQuery struct {
     Order  string `form:"order" binding:"omitempty,oneof=asc desc"`
 }
 
+type PagePaginationQuery struct {
+    Page  int    `form:"page" binding:"omitempty,gt=0"`
+    Limit int    `form:"limit" binding:"omitempty,gt=0"`
+    Order string `form:"order" binding:"omitempty,oneof=asc desc"`
+}
+
 type PaginationMeta struct {
     NextCursor  string `json:"nextCursor"`
     PrevCursor  string `json:"prevCursor,omitempty"`

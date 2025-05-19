@@ -216,3 +216,43 @@ func (r *TaskRepositoryImpl) Delete(id int) error {
 
     return nil
 }
+
+func (r *TaskRepositoryImpl) ListByPage(page int, limit int, order string) ([]*models.Task, int64, error) {
+    if page <= 0 {
+        page = 1
+    }
+    if limit <= 0 {
+        limit = DefaultLimit
+    }
+    if limit > MaxLimit {
+        limit = MaxLimit
+    }
+
+    // Default order if not provided
+    if order == "" {
+        order = DefaultOrder
+    }
+
+    // Calculate offset
+    offset := (page - 1) * limit
+
+    // Get total count
+    var totalCount int64
+    if err := r.db.Model(&models.Task{}).Count(&totalCount).Error; err != nil {
+        return nil, 0, fmt.Errorf("failed to get total count: %w", err)
+    }
+
+    // Get paginated data
+    var tasks []*models.Task
+    query := r.db.Model(&models.Task{}).
+        Order(fmt.Sprintf("created_at %s, id %s", order, order)).
+        Select("id, title, description, done, owner, created_at, updated_at").
+        Offset(offset).
+        Limit(limit)
+
+    if err := query.Find(&tasks).Error; err != nil {
+        return nil, 0, fmt.Errorf("failed to fetch tasks: %w", err)
+    }
+
+    return tasks, totalCount, nil
+}

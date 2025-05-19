@@ -12,6 +12,7 @@ type TaskRepository interface {
 	MarkAsDone(id int) (*models.Task, error)
 	Delete(id int) error
 	GetTotalCount() (int64, error)
+	ListByPage(page int, limit int, order string) ([]*models.Task, int64, error)
 }
 
 // Ensure TaskRepositoryImpl implements TaskRepository at compile time
