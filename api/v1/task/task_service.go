@@ -69,11 +69,13 @@ func (s *TaskService) List(cursor string, limit int, order string) ([]*models.Ta
     }
 
     // Calculate pagination metadata
+    totalPages := int(math.Ceil(float64(totalCount) / float64(limit)))
     currentPage := 1
     if cursor != "" {
-        currentPage = int(totalCount/int64(limit)) + 1
+        // For cursor-based pagination, we don't need to calculate current page
+        // as it's not relevant to the user
+        currentPage = 0
     }
-    totalPages := int(math.Ceil(float64(totalCount) / float64(limit)))
 
     cacheData := struct {
         Tasks      []*models.Task  `json:"tasks"`
@@ -133,7 +135,7 @@ func (s *TaskService) Create(task *models.Task) (*models.Task, error) {
     }
 
     // Invalidate list cache
-    s.cache.Delete("tasks_list*")
+    s.cache.Delete("tasks_cursor_*")
     return createdTask, nil
 }
 
@@ -166,7 +168,7 @@ func (s *TaskService) Update(id int, task *models.Task) (*models.Task, error) {
 
     // Invalidate caches
     s.cache.Delete(fmt.Sprintf("task_%d", task.ID))
-    s.cache.Delete("tasks_list*")
+    s.cache.Delete("tasks_cursor_*")
     return updatedTask, nil
 }
 
@@ -187,7 +189,7 @@ func (s *TaskService) MarkAsDone(id int) (*models.Task, error) {
 
     // Invalidate caches
     s.cache.Delete(fmt.Sprintf("task_%d", id))
-    s.cache.Delete("tasks_list*")
+    s.cache.Delete("tasks_cursor_*")
     return updatedTask, nil
 }
 
@@ -198,6 +200,6 @@ func (s *TaskService) Delete(id int) error {
 
     // Invalidate caches
     s.cache.Delete(fmt.Sprintf("task_%d", id))
-    s.cache.Delete("tasks_list*")
+    s.cache.Delete("tasks_cursor_*")
     return nil
 }

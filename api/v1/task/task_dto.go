@@ -107,6 +107,9 @@ func buildListResponse(tasks []*models.Task, query CursorPaginationQuery, nextCu
     }
     totalPages := int(math.Ceil(float64(totalCount) / float64(query.Limit)))
 
+    // Calculate if there are more records
+    hasMore := totalCount > int64((currentPage * query.Limit))
+
     listResponse := TaskListResponse{
         Tasks: TasksToResponse(tasks),
         Pagination: PaginationMeta{
@@ -114,7 +117,7 @@ func buildListResponse(tasks []*models.Task, query CursorPaginationQuery, nextCu
             PrevCursor:  prevCursor,
             Limit:       query.Limit,
             TotalCount:  totalCount,
-            HasMore:     nextCursor != "",
+            HasMore:     hasMore,
             CurrentPage: currentPage,
             TotalPages:  totalPages,
             Order:       query.Order,

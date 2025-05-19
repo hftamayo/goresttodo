@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hftamayo/gotodo/api/v1/errorlog"
@@ -62,7 +61,7 @@ func (h *Handler) List(c *gin.Context) {
     query = validatePaginationQuery(query)
 
     // Try to get from cache
-    cacheKey := fmt.Sprintf("tasks_list_%s_%d_%s", query.Cursor, query.Limit, query.Order)
+    cacheKey := fmt.Sprintf("tasks_cursor_%s_limit_%d_order_%s", query.Cursor, query.Limit, query.Order)
     var cachedResponse TaskOperationResponse
     if err := h.cache.Get(cacheKey, &cachedResponse); err == nil {
         c.JSON(http.StatusOK, cachedResponse)
@@ -88,7 +87,7 @@ func (h *Handler) List(c *gin.Context) {
     response := buildListResponse(tasks, query, nextCursor, prevCursor, totalCount)
 
     // Cache the response
-    h.cache.Set(cacheKey, response, time.Hour)
+    h.cache.Set(cacheKey, response, defaultCacheTime)
 
     c.JSON(http.StatusOK, response)
 }
@@ -114,15 +113,6 @@ func (h *Handler) ListById(c *gin.Context) {
             utils.OperationFailed,
             "Failed to fetch task",
         ))
-        return
-    }
-
-    if task == nil {
-        c.JSON(http.StatusNotFound, gin.H{
-            "code": http.StatusNotFound,
-            "resultMessage": utils.OperationFailed,
-            "error":        ErrTaskNotFound,
-        })
         return
     }
 
