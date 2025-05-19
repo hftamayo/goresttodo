@@ -84,19 +84,14 @@ func (r *TaskRepositoryImpl) List(limit int, cursorStr string, order string) ([]
             Timestamp: lastTask.CreatedAt,
         }
 
-        // Debug log
-        fmt.Printf("Generating next cursor for task ID: %d, Timestamp: %v\n", c.ID, c.Timestamp)
-
         var err error
         nextCursor, err = cursor.Encode(c, cursor.Options{
             Field:     "created_at",
             Direction: strings.ToUpper(order),
         })
         if err != nil {
-            fmt.Printf("Error encoding next cursor: %v\n", err)
             return nil, "", "", fmt.Errorf("failed to encode next cursor: %w", err)
         }
-        fmt.Printf("Generated next cursor: %s\n", nextCursor)
     }
 
     // Generate previous cursor from first item if we have tasks
@@ -107,19 +102,14 @@ func (r *TaskRepositoryImpl) List(limit int, cursorStr string, order string) ([]
             Timestamp: firstTask.CreatedAt,
         }
 
-        // Debug log
-        fmt.Printf("Generating prev cursor for task ID: %d, Timestamp: %v\n", c.ID, c.Timestamp)
-
         var err error
         prevCursor, err = cursor.Encode(c, cursor.Options{
             Field:     "created_at",
             Direction: strings.ToUpper(order),
         })
         if err != nil {
-            fmt.Printf("Error encoding prev cursor: %v\n", err)
             return nil, "", "", fmt.Errorf("failed to encode previous cursor: %w", err)
         }
-        fmt.Printf("Generated prev cursor: %s\n", prevCursor)
     }
 
     return tasks, nextCursor, prevCursor, nil

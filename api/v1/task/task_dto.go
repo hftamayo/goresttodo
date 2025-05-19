@@ -101,14 +101,13 @@ func NewTaskOperationResponse(data interface{}) TaskOperationResponse {
 
 // buildListResponse creates a paginated list response
 func buildListResponse(tasks []*models.Task, query CursorPaginationQuery, nextCursor, prevCursor string, totalCount int64) TaskOperationResponse {
+    // For cursor-based pagination, we don't need to calculate current page
+    // as it's not relevant to the user
     currentPage := 1
-    if query.Cursor != "" {
-        currentPage = int(totalCount/int64(query.Limit)) + 1
-    }
     totalPages := int(math.Ceil(float64(totalCount) / float64(query.Limit)))
 
     // Calculate if there are more records
-    hasMore := totalCount > int64((currentPage * query.Limit))
+    hasMore := nextCursor != ""
 
     listResponse := TaskListResponse{
         Tasks: TasksToResponse(tasks),

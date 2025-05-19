@@ -39,10 +39,6 @@ func Encode[T any](c Cursor[T], opts Options) (string, error) {
         return "", err
     }    
 
-    // Debug log
-    fmt.Printf("Encoding cursor with ID: %v, Timestamp: %v, Field: %s, Direction: %s\n",
-        c.ID, c.Timestamp, opts.Field, opts.Direction)
-
     // Convert ID to string based on type
     var idStr string
     switch v := any(c.ID).(type) {
@@ -59,9 +55,6 @@ func Encode[T any](c Cursor[T], opts Options) (string, error) {
     str := fmt.Sprintf("%s:%d:%s", idStr, c.Timestamp.Unix(), c.Extra)
     encoded := base64.StdEncoding.EncodeToString([]byte(str))
 
-    // Debug log
-    fmt.Printf("Encoded cursor: %s (from %s)\n", encoded, str)
-
     return encoded, nil
 }
 
@@ -70,9 +63,6 @@ func Decode[T any](str string) (Cursor[T], error) {
     if str == "" {
         return Cursor[T]{}, nil
     }    
-
-    // Debug log
-    fmt.Printf("Decoding cursor: %s\n", str)
 
     bytes, err := base64.StdEncoding.DecodeString(str)
     if err != nil {
@@ -120,9 +110,6 @@ func Decode[T any](str string) (Cursor[T], error) {
     if len(parts) > 2 {
         cursor.Extra = parts[2]
     }
-
-    // Debug log
-    fmt.Printf("Decoded cursor: ID=%v, Timestamp=%v\n", cursor.ID, cursor.Timestamp)
 
     return cursor, nil
 }
