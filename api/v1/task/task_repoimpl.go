@@ -3,7 +3,6 @@ package task
 import (
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/hftamayo/gotodo/api/v1/models"
 	"github.com/hftamayo/gotodo/pkg/cursor"
@@ -40,13 +39,12 @@ func (r *TaskRepositoryImpl) List(limit int, cursorStr string, order string) ([]
         limit = MaxLimit
     }
 
-    // Default order if not provided
-    if order == "" {
-        order = DefaultOrder
-    }
+    fmt.Printf("DEBUG: Starting List with limit=%d, cursor=%s\n", limit, cursorStr)
 
+    // Base query with deleted_at IS NULL condition
     query := r.db.Model(&models.Task{}).
-        Order(fmt.Sprintf("created_at %s, id %s", order, order)).
+        Where("deleted_at IS NULL").
+        Order("id DESC").  // Always order by id DESC to start from most recent
         Select("id, title, description, done, owner, created_at, updated_at")
 
     if cursorStr != "" {
@@ -54,20 +52,39 @@ func (r *TaskRepositoryImpl) List(limit int, cursorStr string, order string) ([]
         if err != nil {
             return nil, "", "", fmt.Errorf("invalid cursor: %w", err)
         }
+        fmt.Printf("DEBUG: Decoded cursor - ID: %d\n", c.ID)
 
-        // Adjust conditions based on order
-        if order == "desc" {
-            query = query.Where("(created_at < ?) OR (created_at = ? AND id < ?)", 
-                c.Timestamp, c.Timestamp, c.ID)
-        } else {
-            query = query.Where("(created_at > ?) OR (created_at = ? AND id > ?)", 
-                c.Timestamp, c.Timestamp, c.ID)
+        // Get all IDs less than the cursor ID
+        var ids []uint
+        if err := r.db.Model(&models.Task{}).
+            Where("deleted_at IS NULL AND id < ?", c.ID).
+            Pluck("id", &ids).Error; err != nil {
+            return nil, "", "", fmt.Errorf("failed to get IDs: %w", err)
         }
+
+        // If we have no IDs, return empty result
+        if len(ids) == 0 {
+            return []*models.Task{}, "", "", nil
+        }
+
+        // Use the IDs in the query
+        query = query.Where("id IN ?", ids)
     }
+
+    // Log the SQL query
+    sql := query.ToSQL(func(tx *gorm.DB) *gorm.DB {
+        return tx.Session(&gorm.Session{DryRun: true})
+    })
+    fmt.Printf("DEBUG: SQL Query: %s\n", sql)
 
     var tasks []*models.Task
     if err := query.Limit(limit + 1).Find(&tasks).Error; err != nil {
         return nil, "", "", fmt.Errorf("failed to fetch tasks: %w", err)
+    }
+
+    fmt.Printf("DEBUG: Found %d tasks\n", len(tasks))
+    for _, task := range tasks {
+        fmt.Printf("DEBUG: Task ID: %d\n", task.ID)
     }
 
     var nextCursor, prevCursor string
@@ -77,39 +94,41 @@ func (r *TaskRepositoryImpl) List(limit int, cursorStr string, order string) ([]
         // Get the last item before removing it
         lastTask := tasks[len(tasks)-1]
         tasks = tasks[:limit] // Remove the extra item
+        fmt.Printf("DEBUG: Has more pages, last task ID: %d\n", lastTask.ID)
 
         // Create cursor for the next page
         c := cursor.Cursor[uint]{
-            ID:        lastTask.ID,
-            Timestamp: lastTask.CreatedAt,
+            ID: lastTask.ID,
         }
 
         var err error
         nextCursor, err = cursor.Encode(c, cursor.Options{
-            Field:     "created_at",
-            Direction: strings.ToUpper(order),
+            Field:     "id",
+            Direction: "DESC",
         })
         if err != nil {
             return nil, "", "", fmt.Errorf("failed to encode next cursor: %w", err)
         }
+        fmt.Printf("DEBUG: Next cursor: %s\n", nextCursor)
     }
 
     // Generate previous cursor from first item if we have tasks
     if len(tasks) > 0 {
         firstTask := tasks[0]
+        fmt.Printf("DEBUG: First task ID: %d\n", firstTask.ID)
         c := cursor.Cursor[uint]{
-            ID:        firstTask.ID,
-            Timestamp: firstTask.CreatedAt,
+            ID: firstTask.ID,
         }
 
         var err error
         prevCursor, err = cursor.Encode(c, cursor.Options{
-            Field:     "created_at",
-            Direction: strings.ToUpper(order),
+            Field:     "id",
+            Direction: "DESC",
         })
         if err != nil {
             return nil, "", "", fmt.Errorf("failed to encode previous cursor: %w", err)
         }
+        fmt.Printf("DEBUG: Previous cursor: %s\n", prevCursor)
     }
 
     return tasks, nextCursor, prevCursor, nil
