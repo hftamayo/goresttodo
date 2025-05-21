@@ -23,8 +23,6 @@ var cachedData struct {
     TotalCount int64          `json:"totalCount"`
 }
 
-var defaultCacheTime = utils.DefaultCacheTime
-
 func NewTaskService(repo TaskRepository, cache *utils.Cache) TaskServiceInterface {
 	return &TaskService{repo: repo, cache: cache}
 }
@@ -95,7 +93,7 @@ func (s *TaskService) List(cursor string, limit int, order string) ([]*models.Ta
     
 
     if cacheBytes, err := json.Marshal(cacheData); err == nil {
-        s.cache.Set(cacheKey, string(cacheBytes), defaultCacheTime)
+        s.cache.Set(cacheKey, string(cacheBytes), utils.DefaultCacheTime)
     }
 
     return tasks, nextCursor, prevCursor, totalCount, nil
@@ -235,7 +233,7 @@ func (s *TaskService) ListByPage(page int, limit int, order string) ([]*models.T
     }{
         Tasks:      tasks,
         TotalCount: totalCount,
-    }, defaultCacheTime)
+    }, utils.DefaultCacheTime)
 
     return tasks, totalCount, nil
 }
