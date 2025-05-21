@@ -1,12 +1,14 @@
 package task
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"math"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hftamayo/gotodo/api/v1/errorlog"
@@ -66,6 +68,10 @@ func (h *Handler) List(c *gin.Context) {
     cacheKey := fmt.Sprintf("tasks_cursor_%s_limit_%d_order_%s", query.Cursor, query.Limit, query.Order)
     var cachedResponse TaskOperationResponse
     if err := h.cache.Get(cacheKey, &cachedResponse); err == nil {
+        setEtagHeader(c, cachedResponse.Data.(TaskListResponse).ETag)
+        c.Header("Last-Modified", cachedResponse.Data.(TaskListResponse).LastModified)
+        addCacheHeaders(c, false)
+
         c.JSON(http.StatusOK, cachedResponse)
         return
     }
@@ -87,6 +93,11 @@ func (h *Handler) List(c *gin.Context) {
 
     // Build response
     response := buildListResponse(tasks, query, nextCursor, prevCursor, totalCount)
+
+    if listResponse, ok := response.Data.(TaskListResponse); ok {
+        setEtagHeader(c, listResponse.ETag)
+        c.Header("Last-Modified", listResponse.LastModified)
+    }    
 
     // Cache the response
     h.cache.Set(cacheKey, response, utils.DefaultCacheTime)
@@ -136,11 +147,20 @@ func (h *Handler) ListById(c *gin.Context) {
         return
     }
 
+    taskETag := fmt.Sprintf("\"%x\"", sha256.Sum256([]byte(
+        fmt.Sprintf("%d-%s-%t-%d", task.ID, task.Title, task.Done, task.UpdatedAt.UnixNano()),
+    )))
+
     response := TaskOperationResponse{
         Code:          http.StatusOK,
         ResultMessage: utils.OperationSuccess,
         Data:          ToTaskResponse(task),
+        Timestamp:     time.Now().Unix(),
+        CacheTTL:      60,        
     }
+
+    c.Header("ETag", taskETag)
+    c.Header("Last-Modified", task.UpdatedAt.UTC().Format(http.TimeFormat))    
 
     h.cache.Set(cacheKey, response, utils.DefaultCacheTime)    
     
@@ -192,6 +212,8 @@ func (h *Handler) Create(c *gin.Context) {
         Code:          http.StatusCreated,
         ResultMessage: utils.OperationSuccess,
         Data:          ToTaskResponse(createdTask),
+        Timestamp:     time.Now().Unix(),
+        CacheTTL:      60,
     }
     h.cache.Delete("tasks_cursor_*") // Invalidate cache for task list
     h.cache.Delete("tasks_page_*") // Invalidate cache for task list by page
@@ -345,9 +367,10 @@ func (h *Handler) ListByPage(c *gin.Context) {
     cacheKey := fmt.Sprintf("tasks_page_%d_limit_%d_order_%s", query.Page, query.Limit, query.Order)
     var cachedResponse TaskOperationResponse
     if err := h.cache.Get(cacheKey, &cachedResponse); err == nil {
+        addCacheHeaders(c, false)
         c.JSON(http.StatusOK, cachedResponse)
         return
-    }    
+    }
 
     // Set defaults
     if query.Page <= 0 {
@@ -384,15 +407,29 @@ func (h *Handler) ListByPage(c *gin.Context) {
                 CurrentPage: query.Page,
                 TotalPages:  totalPages,
                 Order:       query.Order,
+                IsFirstPage: query.Page == 1,
+                IsLastPage:  query.Page >= totalPages,
+                HasMore:     query.Page < totalPages,
+                HasPrev:     query.Page > 1,                
             },
+            ETag:          generateETag(tasks),
+            LastModified:  time.Now().UTC().Format(http.TimeFormat),            
         },
     }
 
     h.cache.Set(cacheKey, response, utils.DefaultCacheTime)
-
+    setEtagHeader(c, response.Data.(TaskListResponse).ETag)
+    c.Header("Last-Modified", response.Data.(TaskListResponse).LastModified)
     addCacheHeaders(c, false)
 
     c.JSON(http.StatusOK, response)
+}
+
+
+func setEtagHeader(c *gin.Context, etag string) {
+    if etag != "" {
+        c.Header("ETag", etag)
+    }
 }
 
 func addCacheHeaders(c *gin.Context, isModifying bool) {
@@ -403,7 +440,7 @@ func addCacheHeaders(c *gin.Context, isModifying bool) {
         c.Header("Expires", "0")
     } else {
         // For GET - allow short caching
-        c.Header("Cache-Control", "private, max-age=60") // 60 seconds
+        c.Header("Cache-Control", "private, max-age=60")
         c.Header("Vary", "Authorization")
     }
 }
