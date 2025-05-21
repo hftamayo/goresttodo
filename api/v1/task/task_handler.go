@@ -89,7 +89,7 @@ func (h *Handler) List(c *gin.Context) {
     response := buildListResponse(tasks, query, nextCursor, prevCursor, totalCount)
 
     // Cache the response
-    h.cache.Set(cacheKey, response, defaultCacheTime)
+    h.cache.Set(cacheKey, response, utils.DefaultCacheTime)
 
     addCacheHeaders(c, false)
 
@@ -142,7 +142,7 @@ func (h *Handler) ListById(c *gin.Context) {
         Data:          ToTaskResponse(task),
     }
 
-    h.cache.Set(cacheKey, response, defaultCacheTime)    
+    h.cache.Set(cacheKey, response, utils.DefaultCacheTime)    
     
     addCacheHeaders(c, false)
 
@@ -386,7 +386,7 @@ func (h *Handler) ListByPage(c *gin.Context) {
         },
     }
 
-    h.cache.Set(cacheKey, response, defaultCacheTime)
+    h.cache.Set(cacheKey, response, utils.DefaultCacheTime)
 
     addCacheHeaders(c, false)
 
