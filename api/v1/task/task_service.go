@@ -129,6 +129,15 @@ func (s *TaskService) Create(task *models.Task) (*models.Task, error) {
         return nil, fmt.Errorf("invalid task data")
     }
 
+    existingTask, err := s.repo.SearchByTitle(task.Title)
+    if err != nil {
+        return nil, fmt.Errorf("failed to check for duplicaet title: %w", err)
+    }
+
+    if existingTask != nil {
+        return nil, fmt.Errorf("task with title %s already exists", task.Title)
+    }
+
     createdTask, err := s.repo.Create(task)
     if err != nil {
         return nil, fmt.Errorf("failed to create task: %w", err)
