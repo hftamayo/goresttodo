@@ -91,6 +91,8 @@ func (h *Handler) List(c *gin.Context) {
     // Cache the response
     h.cache.Set(cacheKey, response, defaultCacheTime)
 
+    addCacheHeaders(c, false)
+
     c.JSON(http.StatusOK, response)
 }
 
@@ -106,6 +108,13 @@ func (h *Handler) ListById(c *gin.Context) {
         ))
         return
     }
+
+    cacheKey := fmt.Sprintf("task_%d", id)
+    var cachedResponse TaskOperationResponse
+    if err := h.cache.Get(cacheKey, &cachedResponse); err == nil {
+        c.JSON(http.StatusOK, cachedResponse)
+        return
+    }    
 
 	task, err := h.service.ListById(id)
     if err != nil {
@@ -132,6 +141,11 @@ func (h *Handler) ListById(c *gin.Context) {
         ResultMessage: utils.OperationSuccess,
         Data:          ToTaskResponse(task),
     }
+
+    h.cache.Set(cacheKey, response, defaultCacheTime)    
+    
+    addCacheHeaders(c, false)
+
     c.JSON(http.StatusOK, response)
 }
 
@@ -179,6 +193,11 @@ func (h *Handler) Create(c *gin.Context) {
         ResultMessage: utils.OperationSuccess,
         Data:          ToTaskResponse(createdTask),
     }
+    h.cache.Delete("tasks_cursor_*") // Invalidate cache for task list
+    h.cache.Delete("tasks_page_*") // Invalidate cache for task list by page
+
+    addCacheHeaders(c, true)
+
     c.JSON(http.StatusCreated, response)
 }
 
@@ -227,6 +246,12 @@ func (h *Handler) Update(c *gin.Context) {
         ResultMessage: utils.OperationSuccess,
         Data:          ToTaskResponse(updatedTask),
     }
+    h.cache.Delete("tasks_cursor_*") 
+    h.cache.Delete("tasks_page_*") 
+    h.cache.Delete(fmt.Sprintf("task_%d", updatedTask.ID)) // Invalidate cache for the updated task
+    
+    addCacheHeaders(c, true)
+
     c.JSON(http.StatusOK, response)
 }
 
@@ -259,6 +284,12 @@ func (h *Handler) Done(c *gin.Context) {
         ResultMessage: utils.OperationSuccess,
         Data:          ToTaskResponse(updatedTask),
     }
+    h.cache.Delete("tasks_cursor_*") 
+    h.cache.Delete("tasks_page_*") 
+    h.cache.Delete(fmt.Sprintf("task_%d", id))    
+
+    addCacheHeaders(c, true)
+
     c.JSON(http.StatusOK, response)
 }
 
@@ -285,6 +316,12 @@ func (h *Handler) Delete(c *gin.Context) {
         return
     }
 
+    h.cache.Delete("tasks_cursor_*")
+    h.cache.Delete("tasks_page_*")
+    h.cache.Delete(fmt.Sprintf("task_%d", id))
+
+    addCacheHeaders(c, true)
+
     c.JSON(http.StatusOK, gin.H{
         "code": http.StatusOK,
         "resultMessage": utils.OperationSuccess,
@@ -302,6 +339,13 @@ func (h *Handler) ListByPage(c *gin.Context) {
         ))
         return
     }
+
+    cacheKey := fmt.Sprintf("tasks_page_%d_limit_%d_order_%s", query.Page, query.Limit, query.Order)
+    var cachedResponse TaskOperationResponse
+    if err := h.cache.Get(cacheKey, &cachedResponse); err == nil {
+        c.JSON(http.StatusOK, cachedResponse)
+        return
+    }    
 
     // Set defaults
     if query.Page <= 0 {
@@ -342,5 +386,22 @@ func (h *Handler) ListByPage(c *gin.Context) {
         },
     }
 
+    h.cache.Set(cacheKey, response, defaultCacheTime)
+
+    addCacheHeaders(c, false)
+
     c.JSON(http.StatusOK, response)
+}
+
+func addCacheHeaders(c *gin.Context, isModifying bool) {
+    if isModifying {
+        // For POST, PUT, DELETE - tell browser not to cache
+        c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+        c.Header("Pragma", "no-cache")
+        c.Header("Expires", "0")
+    } else {
+        // For GET - allow short caching
+        c.Header("Cache-Control", "private, max-age=60") // 60 seconds
+        c.Header("Vary", "Authorization")
+    }
 }
