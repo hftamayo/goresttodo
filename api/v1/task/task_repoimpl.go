@@ -6,6 +6,7 @@ import (
 
 	"github.com/hftamayo/gotodo/api/v1/models"
 	"github.com/hftamayo/gotodo/pkg/cursor"
+	"github.com/hftamayo/gotodo/pkg/utils"
 	"gorm.io/gorm"
 )
 
@@ -255,15 +256,15 @@ func (r *TaskRepositoryImpl) ListByPage(page int, limit int, order string) ([]*m
         page = 1
     }
     if limit <= 0 {
-        limit = DefaultLimit
+        limit = utils.DefaultLimit
     }
-    if limit > MaxLimit {
-        limit = MaxLimit
+    if limit > utils.MaxLimit {
+        limit = utils.MaxLimit
     }
 
     // Default order if not provided
     if order == "" {
-        order = DefaultOrder
+        order = utils.DefaultOrder
     }
 
     // Calculate offset
