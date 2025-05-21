@@ -1,6 +1,8 @@
 package task
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"math"
 	"net/http"
 	"time"
@@ -47,11 +49,16 @@ type PaginationMeta struct {
     CurrentPage int    `json:"currentPage"`
     TotalPages  int    `json:"totalPages"`
     Order       string `json:"order"`
+    HasPrev     bool   `json:"hasPrev"`              // Add hasPrev flag
+    IsFirstPage bool   `json:"isFirstPage"`          // Explicit first page flag
+    IsLastPage  bool   `json:"isLastPage"`           // Explicit last page flag    
 }
 
 type TaskListResponse struct {
     Tasks      []*TaskResponse `json:"tasks"`
     Pagination PaginationMeta  `json:"pagination"`
+    ETag       string          `json:"etag,omitempty"`    // Add ETag for client caching
+    LastModified string        `json:"lastModified,omitempty"` // Last-Modified header value    
 }
 
 type TaskResponse struct {
@@ -68,12 +75,21 @@ type TaskOperationResponse struct {
     Code          int           `json:"code" binding:"required"`
     ResultMessage string        `json:"resultMessage" binding:"required"`
     Data          interface{}   `json:"data,omitempty"`
+    Timestamp     int64         `json:"timestamp"`      // Add timestamp for cache invalidation
+    CacheTTL      int           `json:"cacheTTL,omitempty"` // Time in seconds the response can be cached    
 }
 
 type ErrorResponse struct {
     Code          int    `json:"code"`
     ResultMessage string `json:"resultMessage"`
     Error         string `json:"error,omitempty"`
+}
+
+type TaskOperationStatus struct {
+    IsLoading       bool   `json:"isLoading,omitempty"`
+    LastUpdated     int64  `json:"lastUpdated,omitempty"`
+    RefreshRequired bool   `json:"refreshRequired,omitempty"`
+    Message         string `json:"message,omitempty"`
 }
 
 func ToTaskResponse(task *models.Task) *TaskResponse {
@@ -102,6 +118,8 @@ func NewTaskOperationResponse(data interface{}) TaskOperationResponse {
         Code:          http.StatusOK,
         ResultMessage: utils.OperationSuccess,
         Data:         data,
+        Timestamp:     time.Now().Unix(),
+        CacheTTL:      60, // Cache for 60 seconds on client        
     }
 }
 
@@ -111,6 +129,10 @@ func buildListResponse(tasks []*models.Task, query CursorPaginationQuery, nextCu
     // as it's not relevant to the user
     currentPage := 1
     totalPages := int(math.Ceil(float64(totalCount) / float64(query.Limit)))
+
+    isFirstPage := prevCursor == ""
+    isLastPage := nextCursor == ""
+    hasPrev := prevCursor != ""    
 
     // Calculate if there are more records
     hasMore := nextCursor != ""
@@ -126,7 +148,12 @@ func buildListResponse(tasks []*models.Task, query CursorPaginationQuery, nextCu
             CurrentPage: currentPage,
             TotalPages:  totalPages,
             Order:       query.Order,
+            HasPrev:     hasPrev,              // Add hasPrev flag
+            IsFirstPage: isFirstPage,
+            IsLastPage:  isLastPage,            
         },
+        ETag:          generateETag(tasks),  // Generate unique identifier based on content
+        LastModified:  time.Now().UTC().Format(http.TimeFormat),        
     }
 
     return NewTaskOperationResponse(listResponse)
@@ -138,4 +165,14 @@ func NewErrorResponse(code int, resultMessage string, err string) *ErrorResponse
         ResultMessage: resultMessage,
         Error:         err,
     }
+}
+
+func generateETag(tasks []*models.Task) string {
+    // Simple implementation - in production you might want something more sophisticated
+    hash := sha256.New()
+    for _, task := range tasks {
+        hash.Write([]byte(fmt.Sprintf("%d-%s-%t-%d", 
+            task.ID, task.Title, task.Done, task.UpdatedAt.UnixNano())))
+    }
+    return fmt.Sprintf("\"%x\"", hash.Sum(nil))
 }
