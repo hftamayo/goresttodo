@@ -152,6 +152,20 @@ func (r *TaskRepositoryImpl) ListById(id int) (*models.Task, error) {
 	return &task, nil
 }
 
+func (r *TaskRepositoryImpl) SearchByTitle(title string) (*models.Task, error) {
+    var task models.Task
+    
+    result := r.db.Where("title = ? AND deleted_at IS NULL", title).First(&task)
+    if result.Error != nil {
+        if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+            return nil, nil // No task found with this title
+        }
+        return nil, fmt.Errorf("error searching task by title: %w", result.Error)
+    }
+    
+    return &task, nil
+}
+
 func (r *TaskRepositoryImpl) Create(task *models.Task) (*models.Task, error) {
     if task == nil {
         return nil, errors.New("task cannot be nil")
