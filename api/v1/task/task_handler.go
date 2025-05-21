@@ -6,6 +6,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hftamayo/gotodo/api/v1/errorlog"
@@ -154,13 +155,24 @@ func (h *Handler) Create(c *gin.Context) {
     createdTask, err := h.service.Create(task)
     if err != nil {
         h.errorLogService.LogError("Task_create", err)
-        c.JSON(http.StatusInternalServerError, NewErrorResponse(
-            http.StatusInternalServerError,
+
+        statusCode := http.StatusInternalServerError
+        errorMsg := "Failed to create task"
+
+        // Check for duplicate title error
+        if strings.Contains(err.Error(), "already exists") {
+            statusCode = http.StatusBadRequest
+            errorMsg = err.Error() // Use the actual error message
+        }
+
+        c.JSON(statusCode, NewErrorResponse(
+            statusCode,
             utils.OperationFailed,
-            "Failed to create task",
+            errorMsg,
         ))
         return
     }
+
 
     response := TaskOperationResponse{
         Code:          http.StatusCreated,
