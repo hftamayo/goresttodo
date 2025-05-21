@@ -10,12 +10,6 @@ import (
 	"github.com/hftamayo/gotodo/pkg/utils"
 )
 
-const (
-    defaultCacheTime        = 10 * time.Minute
-    serviceDefaultLimit     = 10
-    serviceMaxLimit         = 100
-)
-
 type TaskService struct {
 	repo  TaskRepository
 	cache *utils.Cache
@@ -28,6 +22,8 @@ var cachedData struct {
     Pagination PaginationMeta  `json:"pagination"`
     TotalCount int64          `json:"totalCount"`
 }
+
+var defaultCacheTime = utils.DefaultCacheTime
 
 func NewTaskService(repo TaskRepository, cache *utils.Cache) TaskServiceInterface {
 	return &TaskService{repo: repo, cache: cache}
@@ -96,6 +92,8 @@ func (s *TaskService) List(cursor string, limit int, order string) ([]*models.Ta
         TotalCount: totalCount,
     }
     
+    
+
     if cacheBytes, err := json.Marshal(cacheData); err == nil {
         s.cache.Set(cacheKey, string(cacheBytes), defaultCacheTime)
     }
