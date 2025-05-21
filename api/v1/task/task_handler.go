@@ -340,6 +340,8 @@ func (h *Handler) ListByPage(c *gin.Context) {
         return
     }
 
+    query = validatePagePaginationQuery(query)
+
     cacheKey := fmt.Sprintf("tasks_page_%d_limit_%d_order_%s", query.Page, query.Limit, query.Order)
     var cachedResponse TaskOperationResponse
     if err := h.cache.Get(cacheKey, &cachedResponse); err == nil {
@@ -352,10 +354,10 @@ func (h *Handler) ListByPage(c *gin.Context) {
         query.Page = 1
     }
     if query.Limit <= 0 {
-        query.Limit = DefaultLimit
+        query.Limit = utils.DefaultLimit
     }
     if query.Order == "" {
-        query.Order = DefaultOrder
+        query.Order = utils.DefaultOrder
     }
 
     tasks, totalCount, err := h.service.ListByPage(query.Page, query.Limit, query.Order)
