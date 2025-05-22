@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"time"
 
 	"github.com/hftamayo/gotodo/api/v1/models"
 	"github.com/hftamayo/gotodo/pkg/utils"
@@ -100,13 +99,37 @@ func (s *TaskService) List(cursor string, limit int, order string) ([]*models.Ta
 }
 
 func (s *TaskService) ListById(id int) (*models.Task, error) {
-	var task *models.Task
     cacheKey := fmt.Sprintf("task_%d", id)
+    var task *models.Task
 
+    // Try to get from cache first
     if err := s.cache.Get(cacheKey, &task); err == nil {
-        return task, nil
+        // Verify the task still exists and hasn't been modified
+        existingTask, err := s.repo.ListById(id)
+        if err != nil {
+            return nil, fmt.Errorf("failed to verify task existence: %w", err)
+        }
+
+        // If task doesn't exist anymore, invalidate cache and return error
+        if existingTask == nil {
+            if err := s.cache.InvalidateByTags(fmt.Sprintf("task:%d", id)); err != nil {
+                fmt.Printf("Failed to invalidate cache: %v\n", err)
+            }
+            return nil, fmt.Errorf("task with id %d not found", id)
+        }
+
+        // If task exists and hasn't been modified, return cached version
+        if task != nil && task.UpdatedAt.Equal(existingTask.UpdatedAt) {
+            return task, nil
+        }
+
+        // If task has been modified, invalidate cache and continue
+        if err := s.cache.InvalidateByTags(fmt.Sprintf("task:%d", id)); err != nil {
+            fmt.Printf("Failed to invalidate cache: %v\n", err)
+        }
     }
 
+    // Get fresh data from repository
     task, err := s.repo.ListById(id)
     if err != nil {
         return nil, fmt.Errorf("failed to get task by id: %w", err)
@@ -116,7 +139,12 @@ func (s *TaskService) ListById(id int) (*models.Task, error) {
         return nil, fmt.Errorf("task with id %d not found", id)
     }
 
-    s.cache.Set(cacheKey, task, 10*time.Minute)
+    // Cache the result with tags
+    if err := s.cache.SetWithTags(cacheKey, task, utils.DefaultCacheTime, 
+        fmt.Sprintf("task:%d", id)); err != nil {
+        fmt.Printf("Failed to cache task: %v\n", err)
+    }
+
     return task, nil
 }
 
@@ -127,7 +155,7 @@ func (s *TaskService) Create(task *models.Task) (*models.Task, error) {
 
     existingTask, err := s.repo.SearchByTitle(task.Title)
     if err != nil {
-        return nil, fmt.Errorf("failed to check for duplicaet title: %w", err)
+        return nil, fmt.Errorf("failed to check for duplicate title: %w", err)
     }
 
     if existingTask != nil {
@@ -139,8 +167,11 @@ func (s *TaskService) Create(task *models.Task) (*models.Task, error) {
         return nil, fmt.Errorf("failed to create task: %w", err)
     }
 
-    // Invalidate list cache
-    s.cache.Delete("tasks_cursor_*")
+    // Invalidate all task-related caches
+    if err := s.cache.InvalidateByTags("tasks:list"); err != nil {
+        fmt.Printf("Failed to invalidate cache: %v\n", err)
+    }
+
     return createdTask, nil
 }
 
@@ -167,13 +198,15 @@ func (s *TaskService) Update(id int, task *models.Task) (*models.Task, error) {
     task.CreatedAt = existingTask.CreatedAt    
 
     updatedTask, err := s.repo.Update(id, task)
-     if err != nil {
+    if err != nil {
         return nil, fmt.Errorf("failed to update task: %w", err)
     }
 
-    // Invalidate caches
-    s.cache.Delete(fmt.Sprintf("task_%d", task.ID))
-    s.cache.Delete("tasks_cursor_*")
+    // Invalidate all task-related caches
+    if err := s.cache.InvalidateByTags("tasks:list", fmt.Sprintf("task:%d", id)); err != nil {
+        fmt.Printf("Failed to invalidate cache: %v\n", err)
+    }
+
     return updatedTask, nil
 }
 
@@ -192,9 +225,11 @@ func (s *TaskService) MarkAsDone(id int) (*models.Task, error) {
         return nil, fmt.Errorf("failed to mark task as done: %w", err)
     }
 
-    // Invalidate caches
-    s.cache.Delete(fmt.Sprintf("task_%d", id))
-    s.cache.Delete("tasks_cursor_*")
+    // Invalidate all task-related caches
+    if err := s.cache.InvalidateByTags("tasks:list", fmt.Sprintf("task:%d", id)); err != nil {
+        fmt.Printf("Failed to invalidate cache: %v\n", err)
+    }
+
     return updatedTask, nil
 }
 
@@ -203,9 +238,11 @@ func (s *TaskService) Delete(id int) error {
         return fmt.Errorf("failed to delete task: %w", err)
     }
 
-    // Invalidate caches
-    s.cache.Delete(fmt.Sprintf("task_%d", id))
-    s.cache.Delete("tasks_cursor_*")
+    // Invalidate all task-related caches
+    if err := s.cache.InvalidateByTags("tasks:list", fmt.Sprintf("task:%d", id)); err != nil {
+        fmt.Printf("Failed to invalidate cache: %v\n", err)
+    }
+
     return nil
 }
 
@@ -218,22 +255,39 @@ func (s *TaskService) ListByPage(page int, limit int, order string) ([]*models.T
     }
     
     if err := s.cache.Get(cacheKey, &cachedData); err == nil {
-        return cachedData.Tasks, cachedData.TotalCount, nil
+        // If we have cached data, verify it's still valid
+        totalCount, err := s.repo.GetTotalCount()
+        if err != nil {
+            return nil, 0, fmt.Errorf("failed to get total count: %w", err)
+        }
+
+        // If total count matches, return cached data
+        if totalCount == cachedData.TotalCount {
+            return cachedData.Tasks, cachedData.TotalCount, nil
+        }
+
+        // If total count doesn't match, invalidate cache and continue
+        if err := s.cache.InvalidateByTags("tasks:list"); err != nil {
+            fmt.Printf("Failed to invalidate cache: %v\n", err)
+        }
     }
 
+    // Get fresh data from repository
     tasks, totalCount, err := s.repo.ListByPage(page, limit, order)
     if err != nil {
         return nil, 0, fmt.Errorf("failed to list tasks by page: %w", err)
     }
 
-    // Cache the results
-    s.cache.Set(cacheKey, struct {
+    // Cache the results with tags
+    if err := s.cache.SetWithTags(cacheKey, struct {
         Tasks      []*models.Task `json:"tasks"`
         TotalCount int64         `json:"totalCount"`
     }{
         Tasks:      tasks,
         TotalCount: totalCount,
-    }, utils.DefaultCacheTime)
+    }, utils.DefaultCacheTime, "tasks:list", fmt.Sprintf("tasks:page:%d", page)); err != nil {
+        fmt.Printf("Failed to cache tasks: %v\n", err)
+    }
 
     return tasks, totalCount, nil
 }
