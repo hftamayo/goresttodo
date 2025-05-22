@@ -169,6 +169,81 @@ func (h *Handler) ListById(c *gin.Context) {
     c.JSON(http.StatusOK, response)
 }
 
+func (h *Handler) ListByPage(c *gin.Context) {
+    var query PagePaginationQuery
+    if err := c.ShouldBindQuery(&query); err != nil {
+        h.errorLogService.LogError("Task_list_by_page_validation", err)
+        c.JSON(http.StatusBadRequest, NewErrorResponse(
+            http.StatusBadRequest,
+            utils.OperationFailed,
+            ErrInvalidPaginationParams.Error(),
+        ))
+        return
+    }
+
+    query = validatePagePaginationQuery(query)
+
+    cacheKey := fmt.Sprintf("tasks_page_%d_limit_%d_order_%s", query.Page, query.Limit, query.Order)
+    var cachedResponse TaskOperationResponse
+    if err := h.cache.Get(cacheKey, &cachedResponse); err == nil {
+        addCacheHeaders(c, false)
+        c.JSON(http.StatusOK, cachedResponse)
+        return
+    }
+
+    // Set defaults
+    if query.Page <= 0 {
+        query.Page = 1
+    }
+    if query.Limit <= 0 {
+        query.Limit = utils.DefaultLimit
+    }
+    if query.Order == "" {
+        query.Order = utils.DefaultOrder
+    }
+
+    tasks, totalCount, err := h.service.ListByPage(query.Page, query.Limit, query.Order)
+    if err != nil {
+        h.errorLogService.LogError("Task_list_by_page", err)
+        c.JSON(http.StatusInternalServerError, NewErrorResponse(
+            http.StatusInternalServerError,
+            utils.OperationFailed,
+            "Failed to fetch tasks",
+        ))
+        return
+    }
+
+    totalPages := int(math.Ceil(float64(totalCount) / float64(query.Limit)))
+    
+    response := TaskOperationResponse{
+        Code:          http.StatusOK,
+        ResultMessage: utils.OperationSuccess,
+        Data: TaskListResponse{
+            Tasks: TasksToResponse(tasks),
+            Pagination: PaginationMeta{
+                Limit:       query.Limit,
+                TotalCount:  totalCount,
+                CurrentPage: query.Page,
+                TotalPages:  totalPages,
+                Order:       query.Order,
+                IsFirstPage: query.Page == 1,
+                IsLastPage:  query.Page >= totalPages,
+                HasMore:     query.Page < totalPages,
+                HasPrev:     query.Page > 1,                
+            },
+            ETag:          generateETag(tasks),
+            LastModified:  time.Now().UTC().Format(http.TimeFormat),            
+        },
+    }
+
+    h.cache.Set(cacheKey, response, utils.DefaultCacheTime)
+    setEtagHeader(c, response.Data.(TaskListResponse).ETag)
+    c.Header("Last-Modified", response.Data.(TaskListResponse).LastModified)
+    addCacheHeaders(c, false)
+
+    c.JSON(http.StatusOK, response)
+}
+
 func (h *Handler) Create(c *gin.Context) {
 	var createRequest CreateTaskRequest
 	if err := c.ShouldBindJSON(&createRequest); err != nil {
@@ -349,82 +424,6 @@ func (h *Handler) Delete(c *gin.Context) {
         "resultMessage": utils.OperationSuccess,
     })
 }
-
-func (h *Handler) ListByPage(c *gin.Context) {
-    var query PagePaginationQuery
-    if err := c.ShouldBindQuery(&query); err != nil {
-        h.errorLogService.LogError("Task_list_by_page_validation", err)
-        c.JSON(http.StatusBadRequest, NewErrorResponse(
-            http.StatusBadRequest,
-            utils.OperationFailed,
-            ErrInvalidPaginationParams.Error(),
-        ))
-        return
-    }
-
-    query = validatePagePaginationQuery(query)
-
-    cacheKey := fmt.Sprintf("tasks_page_%d_limit_%d_order_%s", query.Page, query.Limit, query.Order)
-    var cachedResponse TaskOperationResponse
-    if err := h.cache.Get(cacheKey, &cachedResponse); err == nil {
-        addCacheHeaders(c, false)
-        c.JSON(http.StatusOK, cachedResponse)
-        return
-    }
-
-    // Set defaults
-    if query.Page <= 0 {
-        query.Page = 1
-    }
-    if query.Limit <= 0 {
-        query.Limit = utils.DefaultLimit
-    }
-    if query.Order == "" {
-        query.Order = utils.DefaultOrder
-    }
-
-    tasks, totalCount, err := h.service.ListByPage(query.Page, query.Limit, query.Order)
-    if err != nil {
-        h.errorLogService.LogError("Task_list_by_page", err)
-        c.JSON(http.StatusInternalServerError, NewErrorResponse(
-            http.StatusInternalServerError,
-            utils.OperationFailed,
-            "Failed to fetch tasks",
-        ))
-        return
-    }
-
-    totalPages := int(math.Ceil(float64(totalCount) / float64(query.Limit)))
-    
-    response := TaskOperationResponse{
-        Code:          http.StatusOK,
-        ResultMessage: utils.OperationSuccess,
-        Data: TaskListResponse{
-            Tasks: TasksToResponse(tasks),
-            Pagination: PaginationMeta{
-                Limit:       query.Limit,
-                TotalCount:  totalCount,
-                CurrentPage: query.Page,
-                TotalPages:  totalPages,
-                Order:       query.Order,
-                IsFirstPage: query.Page == 1,
-                IsLastPage:  query.Page >= totalPages,
-                HasMore:     query.Page < totalPages,
-                HasPrev:     query.Page > 1,                
-            },
-            ETag:          generateETag(tasks),
-            LastModified:  time.Now().UTC().Format(http.TimeFormat),            
-        },
-    }
-
-    h.cache.Set(cacheKey, response, utils.DefaultCacheTime)
-    setEtagHeader(c, response.Data.(TaskListResponse).ETag)
-    c.Header("Last-Modified", response.Data.(TaskListResponse).LastModified)
-    addCacheHeaders(c, false)
-
-    c.JSON(http.StatusOK, response)
-}
-
 
 func setEtagHeader(c *gin.Context, etag string) {
     if etag != "" {
