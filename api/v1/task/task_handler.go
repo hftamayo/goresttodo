@@ -486,10 +486,10 @@ func (h *Handler) Done(c *gin.Context) {
 }
 
 func (h *Handler) Delete(c *gin.Context) {
-	// Parse the ID from the URL parameter.
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		h.errorLogService.LogError("Task_delete", err)
+    // Parse the ID from the URL parameter.
+    id, err := strconv.Atoi(c.Param("id"))
+    if err != nil {
+        h.errorLogService.LogError("Task_delete", err)
         c.JSON(http.StatusBadRequest, NewErrorResponse(
             http.StatusBadRequest,
             utils.OperationFailed,
@@ -508,27 +508,29 @@ func (h *Handler) Delete(c *gin.Context) {
         return
     }
 
-    h.cache.Delete("tasks_cursor_*")
-    h.cache.Delete("tasks_page_*")
-    h.cache.Delete(fmt.Sprintf("task_%d", id))
+    // Invalidate cache
+    if err := h.cache.Delete("tasks_cursor_*"); err != nil {
+        h.errorLogService.LogError("Task_delete_cache_invalidation", err)
+    }
 
-    addCacheHeaders(c, true)
+    if err := h.cache.Delete("tasks_page_*"); err != nil {
+        h.errorLogService.LogError("Task_delete_cache_invalidation", err)
+    }
 
+    if err := h.cache.Delete(fmt.Sprintf("task_%d", id)); err != nil {
+        h.errorLogService.LogError("Task_delete_cache_invalidation", err)
+    }
+
+    // For DELETE operations, often just return a success status without data
     response := TaskOperationResponse{
         Code:          http.StatusOK,
         ResultMessage: utils.OperationSuccess,
-        Data:          ToTaskResponse(updatedTask),
+        Data:          nil, // No data to return for a deletion
         Timestamp:     time.Now().Unix(),
-        CacheTTL:      60,
-    }   
-    
-    h.cache.Delete("tasks_cursor_*") 
-    h.cache.Delete("tasks_page_*") 
-    h.cache.Delete(fmt.Sprintf("task_%d", id))    
+    }
 
     addCacheHeaders(c, true)
-
-    c.JSON(http.StatusOK, response)    
+    c.JSON(http.StatusOK, response)
 }
 
 func setEtagHeader(c *gin.Context, etag string) {
