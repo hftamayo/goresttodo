@@ -418,9 +418,18 @@ func (h *Handler) Update(c *gin.Context) {
         Timestamp:     time.Now().Unix(),
         CacheTTL:      60,
     }
-    h.cache.Delete("tasks_cursor_*") 
-    h.cache.Delete("tasks_page_*") 
-    h.cache.Delete(fmt.Sprintf("task_%d", updatedTask.ID)) // Invalidate cache for the updated task
+
+    if err := h.cache.Delete("tasks_cursor_*"); err != nil {
+        h.errorLogService.LogError("Task_update_cache_invalidation", err)
+    }
+
+    if err := h.cache.Delete("tasks_page_*"); err != nil {
+        h.errorLogService.LogError("Task_update_cache_invalidation", err)
+    }
+
+    if err := h.cache.Delete(fmt.Sprintf("task_%d", updatedTask.ID)); err != nil {
+        h.errorLogService.LogError("Task_update_cache_invalidation", err)
+    }
     
     addCacheHeaders(c, true)
 
@@ -458,9 +467,18 @@ func (h *Handler) Done(c *gin.Context) {
         Timestamp:     time.Now().Unix(),
         CacheTTL:      60,
     }
-    h.cache.Delete("tasks_cursor_*") 
-    h.cache.Delete("tasks_page_*") 
-    h.cache.Delete(fmt.Sprintf("task_%d", id))    
+
+    if err := h.cache.Delete("tasks_cursor_*"); err != nil {
+        h.errorLogService.LogError("Task_done_cache_invalidation", err)
+    }
+
+    if err := h.cache.Delete("tasks_page_*"); err != nil {
+        h.errorLogService.LogError("Task_done_cache_invalidation", err)
+    }
+
+    if err := h.cache.Delete(fmt.Sprintf("task_%d", updatedTask.ID)); err != nil {
+        h.errorLogService.LogError("Task_done_cache_invalidation", err)
+    }
 
     addCacheHeaders(c, true)
 
