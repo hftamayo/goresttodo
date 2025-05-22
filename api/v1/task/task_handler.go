@@ -141,22 +141,30 @@ func (h *Handler) ListById(c *gin.Context) {
     cacheKey := fmt.Sprintf("task_%d", id)
     var cachedResponse TaskOperationResponse
     if err := h.cache.Get(cacheKey, &cachedResponse); err == nil {
-        taskETag := "" // Get ETag from response
-        if response, ok := cachedResponse.Data.(*TaskResponse); ok {
-            taskETag = fmt.Sprintf("\"%x\"", sha256.Sum256([]byte(
-                fmt.Sprintf("%d-%s-%t-%d", response.ID, response.Title, response.Done, response.UpdatedAt.UnixNano()),
+        if taskData, ok := cachedResponse.Data.(*TaskResponse); ok {
+            taskETag := fmt.Sprintf("\"%x\"", sha256.Sum256([]byte(
+                fmt.Sprintf("%d-%s-%t-%d", taskData.ID, taskData.Title, taskData.Done, taskData.UpdatedAt.UnixNano()),
             )))
+            
+            // Check if client's cached version is still valid
+            if ifNoneMatch := c.GetHeader("If-None-Match"); ifNoneMatch != "" && 
+                (ifNoneMatch == taskETag || ifNoneMatch == "W/"+taskETag) {
+                c.Status(http.StatusNotModified)
+                return
+            }
+            
+            setEtagHeader(c, taskETag)
+            c.Header("Last-Modified", taskData.UpdatedAt.UTC().Format(http.TimeFormat))
+            addCacheHeaders(c, false)
+            
+            c.JSON(http.StatusOK, cachedResponse)
+        } else {
+            // Invalid cache data type, log and continue with fresh data
+            h.errorLogService.LogError("Task_listbyid_cache_type", 
+                fmt.Errorf("unexpected type for cached data"))
         }
-        
-        if ifNoneMatch := c.GetHeader("If-None-Match"); ifNoneMatch != "" && ifNoneMatch == taskETag {
-            c.Status(http.StatusNotModified)
-            return
-        }
-
-        addCacheHeaders(c, false)
-        c.JSON(http.StatusOK, cachedResponse)
         return
-    }    
+    }
 
 	task, err := h.service.ListById(id)
     if err != nil {
@@ -190,13 +198,16 @@ func (h *Handler) ListById(c *gin.Context) {
         CacheTTL:      60,        
     }
 
-    lastModified := time.Now().UTC().Format(http.TimeFormat)
+    lastModified := task.UpdatedAt.UTC().Format(http.TimeFormat)
 
     c.Header("ETag", taskETag)
     c.Header("Last-Modified", lastModified)    
 
-    h.cache.Set(cacheKey, response, utils.DefaultCacheTime)    
-    
+    // Cache the response
+    if err := h.cache.Set(cacheKey, response, utils.DefaultCacheTime); err != nil {
+        h.errorLogService.LogError("Task_list_cache_set", err)
+    }        
+
     addCacheHeaders(c, false)
 
     c.JSON(http.StatusOK, response)
