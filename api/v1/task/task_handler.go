@@ -68,6 +68,14 @@ func (h *Handler) List(c *gin.Context) {
     cacheKey := fmt.Sprintf("tasks_cursor_%s_limit_%d_order_%s", query.Cursor, query.Limit, query.Order)
     var cachedResponse TaskOperationResponse
     if err := h.cache.Get(cacheKey, &cachedResponse); err == nil {
+        etag := cachedResponse.Data.(TaskListResponse).ETag
+        
+        // Check if client's cached version is still valid
+        if ifNoneMatch := c.GetHeader("If-None-Match"); ifNoneMatch != "" && ifNoneMatch == etag {
+            c.Status(http.StatusNotModified)
+            return
+        }
+
         setEtagHeader(c, cachedResponse.Data.(TaskListResponse).ETag)
         c.Header("Last-Modified", cachedResponse.Data.(TaskListResponse).LastModified)
         addCacheHeaders(c, false)
@@ -123,6 +131,19 @@ func (h *Handler) ListById(c *gin.Context) {
     cacheKey := fmt.Sprintf("task_%d", id)
     var cachedResponse TaskOperationResponse
     if err := h.cache.Get(cacheKey, &cachedResponse); err == nil {
+        taskETag := "" // Get ETag from response
+        if response, ok := cachedResponse.Data.(*TaskResponse); ok {
+            taskETag = fmt.Sprintf("\"%x\"", sha256.Sum256([]byte(
+                fmt.Sprintf("%d-%s-%t-%d", response.ID, response.Title, response.Done, response.UpdatedAt.UnixNano()),
+            )))
+        }
+        
+        if ifNoneMatch := c.GetHeader("If-None-Match"); ifNoneMatch != "" && ifNoneMatch == taskETag {
+            c.Status(http.StatusNotModified)
+            return
+        }
+
+        addCacheHeaders(c, false)
         c.JSON(http.StatusOK, cachedResponse)
         return
     }    
@@ -159,8 +180,10 @@ func (h *Handler) ListById(c *gin.Context) {
         CacheTTL:      60,        
     }
 
+    lastModified := time.Now().UTC().Format(http.TimeFormat)
+
     c.Header("ETag", taskETag)
-    c.Header("Last-Modified", task.UpdatedAt.UTC().Format(http.TimeFormat))    
+    c.Header("Last-Modified", lastModified)    
 
     h.cache.Set(cacheKey, response, utils.DefaultCacheTime)    
     
@@ -342,6 +365,8 @@ func (h *Handler) Update(c *gin.Context) {
         Code:          http.StatusOK,
         ResultMessage: utils.OperationSuccess,
         Data:          ToTaskResponse(updatedTask),
+        Timestamp:     time.Now().Unix(),
+        CacheTTL:      60,
     }
     h.cache.Delete("tasks_cursor_*") 
     h.cache.Delete("tasks_page_*") 
@@ -380,6 +405,8 @@ func (h *Handler) Done(c *gin.Context) {
         Code:          http.StatusOK,
         ResultMessage: utils.OperationSuccess,
         Data:          ToTaskResponse(updatedTask),
+        Timestamp:     time.Now().Unix(),
+        CacheTTL:      60,
     }
     h.cache.Delete("tasks_cursor_*") 
     h.cache.Delete("tasks_page_*") 
@@ -419,10 +446,21 @@ func (h *Handler) Delete(c *gin.Context) {
 
     addCacheHeaders(c, true)
 
-    c.JSON(http.StatusOK, gin.H{
-        "code": http.StatusOK,
-        "resultMessage": utils.OperationSuccess,
-    })
+    response := TaskOperationResponse{
+        Code:          http.StatusOK,
+        ResultMessage: utils.OperationSuccess,
+        Data:          ToTaskResponse(updatedTask),
+        Timestamp:     time.Now().Unix(),
+        CacheTTL:      60,
+    }   
+    
+    h.cache.Delete("tasks_cursor_*") 
+    h.cache.Delete("tasks_page_*") 
+    h.cache.Delete(fmt.Sprintf("task_%d", id))    
+
+    addCacheHeaders(c, true)
+
+    c.JSON(http.StatusOK, response)    
 }
 
 func setEtagHeader(c *gin.Context, etag string) {
