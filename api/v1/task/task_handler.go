@@ -324,6 +324,8 @@ func (h *Handler) Create(c *gin.Context) {
 
     task := &models.Task{
         Title:       createRequest.Title,
+        Description: createRequest.Description, //this is an optional field
+        Done:        false, // Default to false
         Owner:       createRequest.Owner,
     }
 
@@ -356,9 +358,14 @@ func (h *Handler) Create(c *gin.Context) {
         Timestamp:     time.Now().Unix(),
         CacheTTL:      60,
     }
-    h.cache.Delete("tasks_cursor_*") // Invalidate cache for task list
-    h.cache.Delete("tasks_page_*") // Invalidate cache for task list by page
 
+    if err := h.cache.Delete("tasks_cursor_*"); err != nil {
+        h.errorLogService.LogError("Task_create_cache_invalidation", err)
+    }
+
+    if err := h.cache.Delete("tasks_page_*"); err != nil {
+        h.errorLogService.LogError("Task_create_cache_invalidation", err)
+    }
     addCacheHeaders(c, true)
 
     c.JSON(http.StatusCreated, response)
