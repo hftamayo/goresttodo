@@ -68,19 +68,26 @@ func (h *Handler) List(c *gin.Context) {
     cacheKey := fmt.Sprintf("tasks_cursor_%s_limit_%d_order_%s", query.Cursor, query.Limit, query.Order)
     var cachedResponse TaskOperationResponse
     if err := h.cache.Get(cacheKey, &cachedResponse); err == nil {
-        etag := cachedResponse.Data.(TaskListResponse).ETag
-        
-        // Check if client's cached version is still valid
-        if ifNoneMatch := c.GetHeader("If-None-Match"); ifNoneMatch != "" && ifNoneMatch == etag {
-            c.Status(http.StatusNotModified)
-            return
+        if cachedData, ok := cachedResponse.Data.(TaskListResponse); ok {
+            etag := cachedData.ETag
+            
+            // Check if client's cached version is still valid
+            if ifNoneMatch := c.GetHeader("If-None-Match"); ifNoneMatch != "" && 
+                (ifNoneMatch == etag || ifNoneMatch == "W/"+etag) {
+                c.Status(http.StatusNotModified)
+                return
+            }
+
+            setEtagHeader(c, cachedData.ETag)
+            c.Header("Last-Modified", cachedData.LastModified)
+            addCacheHeaders(c, false)
+            
+            c.JSON(http.StatusOK, cachedResponse)
+        } else {
+            // Invalid cache data type, log and continue with fresh data
+            h.errorLogService.LogError("Task_list_cache_type", 
+                fmt.Errorf("unexpected type for cached data"))
         }
-
-        setEtagHeader(c, cachedResponse.Data.(TaskListResponse).ETag)
-        c.Header("Last-Modified", cachedResponse.Data.(TaskListResponse).LastModified)
-        addCacheHeaders(c, false)
-
-        c.JSON(http.StatusOK, cachedResponse)
         return
     }
 
@@ -108,7 +115,10 @@ func (h *Handler) List(c *gin.Context) {
     }    
 
     // Cache the response
-    h.cache.Set(cacheKey, response, utils.DefaultCacheTime)
+    if err := h.cache.Set(cacheKey, response, utils.DefaultCacheTime); err != nil {
+        h.errorLogService.LogError("Task_list_cache_set", err)
+        // Continue without failing the request
+    }    
 
     addCacheHeaders(c, false)
 
