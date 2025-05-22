@@ -225,27 +225,37 @@ func (h *Handler) ListByPage(c *gin.Context) {
         return
     }
 
+    // Validate and set defaults
     query = validatePagePaginationQuery(query)
 
+    // Try to get from cache
     cacheKey := fmt.Sprintf("tasks_page_%d_limit_%d_order_%s", query.Page, query.Limit, query.Order)
     var cachedResponse TaskOperationResponse
     if err := h.cache.Get(cacheKey, &cachedResponse); err == nil {
-        addCacheHeaders(c, false)
-        c.JSON(http.StatusOK, cachedResponse)
+        if cachedData, ok := cachedResponse.Data.(TaskListResponse); ok {
+            etag := cachedData.ETag
+            
+            // Check if client's cached version is still valid
+            if ifNoneMatch := c.GetHeader("If-None-Match"); ifNoneMatch != "" && 
+                (ifNoneMatch == etag || ifNoneMatch == "W/"+etag) {
+                c.Status(http.StatusNotModified)
+                return
+            }
+            
+            setEtagHeader(c, etag)
+            c.Header("Last-Modified", cachedData.LastModified)
+            addCacheHeaders(c, false)
+            
+            c.JSON(http.StatusOK, cachedResponse)
+        } else {
+            // Invalid cache data type, log and continue with fresh data
+            h.errorLogService.LogError("Task_listbypage_cache_type", 
+                fmt.Errorf("unexpected type for cached data"))
+        }
         return
-    }
+    }    
 
-    // Set defaults
-    if query.Page <= 0 {
-        query.Page = 1
-    }
-    if query.Limit <= 0 {
-        query.Limit = utils.DefaultLimit
-    }
-    if query.Order == "" {
-        query.Order = utils.DefaultOrder
-    }
-
+    // Get data from service - no need to set defaults again as validatePagePaginationQuery already did this
     tasks, totalCount, err := h.service.ListByPage(query.Page, query.Limit, query.Order)
     if err != nil {
         h.errorLogService.LogError("Task_list_by_page", err)
@@ -259,6 +269,11 @@ func (h *Handler) ListByPage(c *gin.Context) {
 
     totalPages := int(math.Ceil(float64(totalCount) / float64(query.Limit)))
     
+    // Generate ETag and LastModified
+    etag := generateETag(tasks)
+    lastModified := time.Now().UTC().Format(http.TimeFormat)
+    
+    // Build response
     response := TaskOperationResponse{
         Code:          http.StatusOK,
         ResultMessage: utils.OperationSuccess,
@@ -275,16 +290,23 @@ func (h *Handler) ListByPage(c *gin.Context) {
                 HasMore:     query.Page < totalPages,
                 HasPrev:     query.Page > 1,                
             },
-            ETag:          generateETag(tasks),
-            LastModified:  time.Now().UTC().Format(http.TimeFormat),            
+            ETag:          etag,
+            LastModified:  lastModified,            
         },
+        Timestamp:     time.Now().Unix(),
+        CacheTTL:      60,
     }
 
-    h.cache.Set(cacheKey, response, utils.DefaultCacheTime)
-    setEtagHeader(c, response.Data.(TaskListResponse).ETag)
-    c.Header("Last-Modified", response.Data.(TaskListResponse).LastModified)
-    addCacheHeaders(c, false)
+    // Set headers
+    setEtagHeader(c, etag)
+    c.Header("Last-Modified", lastModified)
 
+    // Cache the response
+    if err := h.cache.Set(cacheKey, response, utils.DefaultCacheTime); err != nil {
+        h.errorLogService.LogError("Task_list_by_page_cache_set", err)
+    }        
+
+    addCacheHeaders(c, false)
     c.JSON(http.StatusOK, response)
 }
 
