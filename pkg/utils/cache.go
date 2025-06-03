@@ -51,6 +51,10 @@ func (c *Cache) DeletePattern(pattern string) error {
 	return iter.Err()
 }
 
+func (c *Cache) DeleteByPrefix(prefix string) error {
+    return c.DeletePattern(prefix + "*")
+}
+
 // SetWithTags sets a value with associated tags
 func (c *Cache) SetWithTags(key string, value interface{}, expiration time.Duration, tags ...string) error {
 	ctx := context.Background()
