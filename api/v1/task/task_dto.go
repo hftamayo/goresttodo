@@ -119,7 +119,7 @@ func NewTaskOperationResponse(data interface{}) TaskOperationResponse {
         ResultMessage: utils.OperationSuccess,
         Data:         data,
         Timestamp:     time.Now().Unix(),
-        CacheTTL:      60, // Cache for 60 seconds on client        
+        CacheTTL:      30, // Cache for 60 seconds on client        
     }
 }
 
@@ -170,9 +170,40 @@ func NewErrorResponse(code int, resultMessage string, err string) *ErrorResponse
 func generateETag(tasks []*models.Task) string {
     // Simple implementation - in production you might want something more sophisticated
     hash := sha256.New()
-    for _, task := range tasks {
-        hash.Write([]byte(fmt.Sprintf("%d-%s-%t-%d", 
-            task.ID, task.Title, task.Done, task.UpdatedAt.UnixNano())))
+    if len(tasks) == 0 {
+        hash.Write([]byte("empty-task-list"))
+        return fmt.Sprintf("W/\"%x\"", hash.Sum(nil))
     }
-    return fmt.Sprintf("\"%x\"", hash.Sum(nil))
+    
+    // Otherwise, hash based on task contents
+    for _, task := range tasks {
+        // Include all relevant fields that would affect output
+        hash.Write([]byte(fmt.Sprintf("%d-%s-%s-%t-%d-%d", 
+            task.ID, 
+            task.Title, 
+            task.Description, 
+            task.Done, 
+            task.Owner,
+            task.UpdatedAt.UnixNano())))
+    }
+    
+    // Use weak ETag format (W/"hash") for better compatibility
+    return fmt.Sprintf("W/\"%x\"", hash.Sum(nil))
+}
+
+func generateTaskETag(task *models.Task) string {
+    if task == nil {
+        return ""
+    }
+    
+    hash := sha256.New()
+    hash.Write([]byte(fmt.Sprintf("%d-%s-%s-%t-%d-%d", 
+        task.ID, 
+        task.Title, 
+        task.Description, 
+        task.Done, 
+        task.Owner,
+        task.UpdatedAt.UnixNano())))
+    
+    return fmt.Sprintf("W/\"%x\"", hash.Sum(nil))
 }
