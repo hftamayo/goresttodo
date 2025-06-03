@@ -227,7 +227,11 @@ func (h *Handler) ListByPage(c *gin.Context) {
     cacheKey := fmt.Sprintf("tasks_page_%d_limit_%d_order_%s", query.Page, query.Limit, query.Order)    
 
     // Try to get from cache only if not forcing fresh data
-    if !forceFresh {
+    if forceFresh {
+        c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+        c.Header("Pragma", "no-cache")
+        c.Header("Expires", "0")
+    } else {
         var cachedResponse TaskOperationResponse
         if err := h.cache.Get(cacheKey, &cachedResponse); err == nil {
             if cachedData, ok := cachedResponse.Data.(TaskListResponse); ok {
