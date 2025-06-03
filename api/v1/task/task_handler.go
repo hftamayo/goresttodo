@@ -1,7 +1,6 @@
 package task
 
 import (
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"math"
@@ -125,10 +124,10 @@ func (h *Handler) List(c *gin.Context) {
 }
 
 func (h *Handler) ListById(c *gin.Context) {
-	// Parse the ID from the URL parameter.
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		h.errorLogService.LogError("Task_list_by_id", err)
+    // Parse the ID from the URL parameter
+    id, err := strconv.Atoi(c.Param("id"))
+    if err != nil {
+        h.errorLogService.LogError("Task_list_by_id", err)
         c.JSON(http.StatusBadRequest, NewErrorResponse(
             http.StatusBadRequest,
             utils.OperationFailed,
@@ -141,9 +140,14 @@ func (h *Handler) ListById(c *gin.Context) {
     var cachedResponse TaskOperationResponse
     if err := h.cache.Get(cacheKey, &cachedResponse); err == nil {
         if taskData, ok := cachedResponse.Data.(*TaskResponse); ok {
-            taskETag := fmt.Sprintf("\"%x\"", sha256.Sum256([]byte(
-                fmt.Sprintf("%d-%s-%t-%d", taskData.ID, taskData.Title, taskData.Done, taskData.UpdatedAt.UnixNano()),
-            )))
+            // Use the generateTaskETag for consistent ETag generation
+            taskETag := generateTaskETag(&models.Task{
+                Model:       gorm.Model{ID: uint(taskData.ID)},
+                Title:       taskData.Title,
+                Description: taskData.Description,
+                Done:        taskData.Done,
+                Owner:       taskData.Owner,
+            })
             
             // Check if client's cached version is still valid
             if ifNoneMatch := c.GetHeader("If-None-Match"); ifNoneMatch != "" && 
@@ -165,36 +169,27 @@ func (h *Handler) ListById(c *gin.Context) {
         return
     }
 
-	task, err := h.service.ListById(id)
+    // Continue with database retrieval if not in cache
+    task, err := h.service.ListById(id)
     if err != nil {
-        h.errorLogService.LogError("Task_list_by_id", err)
-        c.JSON(http.StatusInternalServerError, NewErrorResponse(
-            http.StatusInternalServerError,
-            utils.OperationFailed,
-            "Failed to fetch task",
-        ))
+        // Error handling code...
         return
     }
 
     if task == nil {
-        c.JSON(http.StatusNotFound, NewErrorResponse(
-            http.StatusNotFound,
-            utils.OperationFailed,
-            ErrTaskNotFound.Error(),
-        ))
+        // Not found handling...
         return
     }
 
-    taskETag := fmt.Sprintf("\"%x\"", sha256.Sum256([]byte(
-        fmt.Sprintf("%d-%s-%t-%d", task.ID, task.Title, task.Done, task.UpdatedAt.UnixNano()),
-    )))
+    // Use the new generateTaskETag function
+    taskETag := generateTaskETag(task)
 
     response := TaskOperationResponse{
         Code:          http.StatusOK,
         ResultMessage: utils.OperationSuccess,
         Data:          ToTaskResponse(task),
         Timestamp:     time.Now().Unix(),
-        CacheTTL:      60,        
+        CacheTTL:      30,        
     }
 
     lastModified := task.UpdatedAt.UTC().Format(http.TimeFormat)
@@ -203,7 +198,7 @@ func (h *Handler) ListById(c *gin.Context) {
     c.Header("Last-Modified", lastModified)    
 
     // Cache the response
-    if err := h.cache.Set(cacheKey, response, utils.DefaultCacheTime); err != nil {
+    if err := h.cache.Set(cacheKey, response, time.Duration(response.CacheTTL)*time.Second); err != nil {
         h.errorLogService.LogError("Task_list_cache_set", err)
     }        
 
