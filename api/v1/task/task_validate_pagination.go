@@ -39,6 +39,11 @@ func validatePagePaginationQuery(query PagePaginationQuery) PagePaginationQuery 
     if query.Page <= 0 {
         query.Page = 1
     }
+
+    maxPages := 100
+    if query.Page > maxPages {
+        query.Page = maxPages
+    }
     
     // Normalize order to lowercase and set default
     query.Order = strings.ToLower(query.Order)
