@@ -10,7 +10,6 @@ import (
 func SetupRateLimiter(redisClient *redis.Client, defaultLimit int, window time.Duration) *utils.RateLimiter {
     rateLimiter := utils.NewRateLimiter(redisClient)
     
-    // Set the window
     rateLimiter.Window = window
     
     // Configure limits for different operation types

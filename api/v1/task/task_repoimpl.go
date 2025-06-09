@@ -14,12 +14,13 @@ type TaskRepositoryImpl struct {
 	db *gorm.DB
 }
 
+const errTaskNotFoundFmt = "task not found: %d"
+
 func NewTaskRepositoryImpl(db *gorm.DB) TaskRepository {
-	if db == nil {
-		fmt.Errorf("database connection is required")
-		return nil
-	}
-	return &TaskRepositoryImpl{db: db}
+    if db == nil {
+        return nil
+    }
+    return &TaskRepositoryImpl{db: db}
 }
 
 func (r *TaskRepositoryImpl) GetTotalCount() (int64, error) {
@@ -186,7 +187,7 @@ func (r *TaskRepositoryImpl) Update(id int, task *models.Task) (*models.Task, er
      var existingTask models.Task
     if err := r.db.First(&existingTask, id).Error; err != nil {
         if errors.Is(err, gorm.ErrRecordNotFound) {
-            return nil, fmt.Errorf("task not found: %d", id)
+            return nil, fmt.Errorf(errTaskNotFoundFmt, id)
         }
         return nil, fmt.Errorf("failed to verify task existence: %w", err)
     }
@@ -223,7 +224,7 @@ func (r *TaskRepositoryImpl) MarkAsDone(id int) (*models.Task, error) {
         return nil, fmt.Errorf("failed to mark task as done: %w", result.Error)
     }
     if result.RowsAffected == 0 {
-        return nil, fmt.Errorf("task not found: %d", id)
+        return nil, fmt.Errorf(errTaskNotFoundFmt, id)
     }
     
     if err := r.db.First(&task, id).Error; err != nil {
@@ -245,7 +246,7 @@ func (r *TaskRepositoryImpl) Delete(id int) error {
     }
 
     if result.RowsAffected == 0 {
-        return fmt.Errorf("task not found: %d", id)
+        return fmt.Errorf(errTaskNotFoundFmt, id)
     }
 
     return nil
