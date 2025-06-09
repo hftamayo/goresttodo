@@ -62,34 +62,6 @@ func (h *Handler) List(c *gin.Context) {
 
     // Validate and set defaults
     query = validatePaginationQuery(query)
-
-    // Try to get from cache
-    // cacheKey := fmt.Sprintf("tasks_cursor_%s_limit_%d_order_%s", query.Cursor, query.Limit, query.Order)
-    // var cachedResponse TaskOperationResponse
-    // if err := h.cache.Get(cacheKey, &cachedResponse); err == nil {
-    //     if cachedData, ok := cachedResponse.Data.(TaskListResponse); ok {
-    //         etag := cachedData.ETag
-            
-    //         // Check if client's cached version is still valid
-    //         if ifNoneMatch := c.GetHeader("If-None-Match"); ifNoneMatch != "" && 
-    //             (ifNoneMatch == etag || ifNoneMatch == "W/"+etag) {
-    //             c.Status(http.StatusNotModified)
-    //             return
-    //         }
-
-    //         setEtagHeader(c, cachedData.ETag)
-    //         c.Header("Last-Modified", cachedData.LastModified)
-    //         addCacheHeaders(c, false)
-            
-    //         c.JSON(http.StatusOK, cachedResponse)
-    //     } else {
-    //         // Invalid cache data type, log and continue with fresh data
-    //         h.errorLogService.LogError("Task_list_cache_type", 
-    //             fmt.Errorf("unexpected type for cached data"))
-    //     }
-    //     return
-    // }
-
     tasks, nextCursor, prevCursor, totalCount, err := h.service.List(query.Cursor, query.Limit, query.Order)
     if err != nil {
         h.errorLogService.LogError("Task_list", err)
