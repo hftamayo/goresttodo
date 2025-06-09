@@ -112,10 +112,10 @@ func (s *TaskService) ListById(id int) (*models.Task, error) {
 
         // If task doesn't exist anymore, invalidate cache and return error
         if existingTask == nil {
-            if err := s.cache.InvalidateByTags(fmt.Sprintf("task:%d", id)); err != nil {
-                fmt.Printf("Failed to invalidate cache: %v\n", err)
+            if err := s.cache.InvalidateByTags(fmt.Sprintf(errTaskReference, id)); err != nil {
+                fmt.Printf(errInvalidateCacheFmt, err)
             }
-            return nil, fmt.Errorf("task with id %d not found", id)
+            return nil, fmt.Errorf(errTaskNotFoundFmt, id)
         }
 
         // If task exists and hasn't been modified, return cached version
@@ -124,8 +124,8 @@ func (s *TaskService) ListById(id int) (*models.Task, error) {
         }
 
         // If task has been modified, invalidate cache and continue
-        if err := s.cache.InvalidateByTags(fmt.Sprintf("task:%d", id)); err != nil {
-            fmt.Printf("Failed to invalidate cache: %v\n", err)
+        if err := s.cache.InvalidateByTags(fmt.Sprintf(errTaskReference, id)); err != nil {
+            fmt.Printf(errInvalidateCacheFmt, err)
         }
     }
 
@@ -136,12 +136,12 @@ func (s *TaskService) ListById(id int) (*models.Task, error) {
     }
 
     if task == nil {
-        return nil, fmt.Errorf("task with id %d not found", id)
+        return nil, fmt.Errorf(errTaskNotFoundFmt, id)
     }
 
     // Cache the result with tags
     if err := s.cache.SetWithTags(cacheKey, task, utils.DefaultCacheTime, 
-        fmt.Sprintf("task:%d", id)); err != nil {
+        fmt.Sprintf(errTaskReference, id)); err != nil {
         fmt.Printf("Failed to cache task: %v\n", err)
     }
 
@@ -168,8 +168,8 @@ func (s *TaskService) Create(task *models.Task) (*models.Task, error) {
     }
 
     // Invalidate all task-related caches
-    if err := s.cache.InvalidateByTags("tasks:list"); err != nil {
-        fmt.Printf("Failed to invalidate cache: %v\n", err)
+    if err := s.cache.InvalidateByTags(taskServiceListRef); err != nil {
+        fmt.Printf(errInvalidateCacheFmt, err)
     }
 
     return createdTask, nil
@@ -190,7 +190,7 @@ func (s *TaskService) Update(id int, task *models.Task) (*models.Task, error) {
     }
 
     if existingTask == nil {
-        return nil, fmt.Errorf("task with id %d not found", task.ID)
+        return nil, fmt.Errorf(errTaskNotFoundFmt, task.ID)
     }
 
     // Prevent modification of immutable fields
@@ -203,8 +203,8 @@ func (s *TaskService) Update(id int, task *models.Task) (*models.Task, error) {
     }
 
     // Invalidate all task-related caches
-    if err := s.cache.InvalidateByTags("tasks:list", fmt.Sprintf("task:%d", id)); err != nil {
-        fmt.Printf("Failed to invalidate cache: %v\n", err)
+    if err := s.cache.InvalidateByTags(taskServiceListRef, fmt.Sprintf(errTaskReference, id)); err != nil {
+        fmt.Printf(errInvalidateCacheFmt, err)
     }
 
     return updatedTask, nil
@@ -217,7 +217,7 @@ func (s *TaskService) MarkAsDone(id int) (*models.Task, error) {
     }
 
     if existingTask == nil {
-        return nil, fmt.Errorf("task with id %d not found", id)
+        return nil, fmt.Errorf(errTaskNotFoundFmt, id)
     }
 
     updatedTask, err := s.repo.MarkAsDone(id)
@@ -226,8 +226,8 @@ func (s *TaskService) MarkAsDone(id int) (*models.Task, error) {
     }
 
     // Invalidate all task-related caches
-    if err := s.cache.InvalidateByTags("tasks:list", fmt.Sprintf("task:%d", id)); err != nil {
-        fmt.Printf("Failed to invalidate cache: %v\n", err)
+    if err := s.cache.InvalidateByTags(taskServiceListRef, fmt.Sprintf(errTaskReference, id)); err != nil {
+        fmt.Printf(errInvalidateCacheFmt, err)
     }
 
     return updatedTask, nil
@@ -239,8 +239,8 @@ func (s *TaskService) Delete(id int) error {
     }
 
     // Invalidate all task-related caches
-    if err := s.cache.InvalidateByTags("tasks:list", fmt.Sprintf("task:%d", id)); err != nil {
-        fmt.Printf("Failed to invalidate cache: %v\n", err)
+    if err := s.cache.InvalidateByTags(taskServiceListRef, fmt.Sprintf(errTaskReference, id)); err != nil {
+        fmt.Printf(errInvalidateCacheFmt, err)
     }
 
     return nil
@@ -267,8 +267,8 @@ func (s *TaskService) ListByPage(page int, limit int, order string) ([]*models.T
         }
 
         // If total count doesn't match, invalidate cache and continue
-        if err := s.cache.InvalidateByTags("tasks:list"); err != nil {
-            fmt.Printf("Failed to invalidate cache: %v\n", err)
+        if err := s.cache.InvalidateByTags(taskServiceListRef); err != nil {
+            fmt.Printf(errInvalidateCacheFmt, err)
         }
     }
 
@@ -285,7 +285,7 @@ func (s *TaskService) ListByPage(page int, limit int, order string) ([]*models.T
     }{
         Tasks:      tasks,
         TotalCount: totalCount,
-    }, utils.DefaultCacheTime, "tasks:list", fmt.Sprintf("tasks:page:%d", page)); err != nil {
+    }, utils.DefaultCacheTime, taskServiceListRef, fmt.Sprintf("tasks:page:%d", page)); err != nil {
         fmt.Printf("Failed to cache tasks: %v\n", err)
     }
 

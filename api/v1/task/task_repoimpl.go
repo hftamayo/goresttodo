@@ -14,8 +14,6 @@ type TaskRepositoryImpl struct {
 	db *gorm.DB
 }
 
-const errTaskNotFoundFmt = "task not found: %d"
-
 func NewTaskRepositoryImpl(db *gorm.DB) TaskRepository {
     if db == nil {
         return nil
