@@ -82,7 +82,7 @@ func (h *Handler) List(c *gin.Context) {
 
     if listResponse, ok := response.Data.(TaskListResponse); ok {
         setEtagHeader(c, listResponse.ETag)
-        c.Header("Last-Modified", listResponse.LastModified)
+        c.Header(headerLastModified, listResponse.LastModified)
     }    
 
     // Cache the response
@@ -108,7 +108,7 @@ func (h *Handler) ListById(c *gin.Context) {
         return
     }
 
-    cacheKey := fmt.Sprintf("task_%d", id)
+    cacheKey := fmt.Sprintf(taskCacheKey, id)
     var cachedResponse TaskOperationResponse
     if err := h.cache.Get(cacheKey, &cachedResponse); err == nil {
         if taskData, ok := cachedResponse.Data.(*TaskResponse); ok {
@@ -129,7 +129,7 @@ func (h *Handler) ListById(c *gin.Context) {
             }
             
             setEtagHeader(c, taskETag)
-            c.Header("Last-Modified", taskData.UpdatedAt.UTC().Format(http.TimeFormat))
+            c.Header(headerLastModified, taskData.UpdatedAt.UTC().Format(http.TimeFormat))
             addCacheHeaders(c, false)
             
             c.JSON(http.StatusOK, cachedResponse)
@@ -167,7 +167,7 @@ func (h *Handler) ListById(c *gin.Context) {
     lastModified := task.UpdatedAt.UTC().Format(http.TimeFormat)
 
     c.Header("ETag", taskETag)
-    c.Header("Last-Modified", lastModified)    
+    c.Header(headerLastModified, lastModified)    
 
     // Cache the response
     if err := h.cache.Set(cacheKey, response, time.Duration(response.CacheTTL)*time.Second); err != nil {
@@ -200,7 +200,7 @@ func (h *Handler) ListByPage(c *gin.Context) {
 
     // Try to get from cache only if not forcing fresh data
     if forceFresh {
-        c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+        c.Header(headerCacheControl, "no-cache, no-store, must-revalidate")
         c.Header("Pragma", "no-cache")
         c.Header("Expires", "0")
     } else {
@@ -217,7 +217,7 @@ func (h *Handler) ListByPage(c *gin.Context) {
                 }
                 
                 setEtagHeader(c, etag)
-                c.Header("Last-Modified", cachedData.LastModified)
+                c.Header(headerLastModified, cachedData.LastModified)
                 addCacheHeaders(c, false)
                 
                 c.JSON(http.StatusOK, cachedResponse)
@@ -265,12 +265,12 @@ func (h *Handler) ListByPage(c *gin.Context) {
 
         // Set headers
         setEtagHeader(c, response.Data.(TaskListResponse).ETag)
-        c.Header("Last-Modified", response.Data.(TaskListResponse).LastModified)
+        c.Header(headerLastModified, response.Data.(TaskListResponse).LastModified)
 
         // Cache the empty response
         if !forceFresh {
             if err := h.cache.SetWithTags(cacheKey, response, utils.DefaultCacheTime, 
-                "tasks:list", fmt.Sprintf("tasks:page:%d", query.Page)); err != nil {
+                taskServiceListRef, fmt.Sprintf("tasks:page:%d", query.Page)); err != nil {
                 h.errorLogService.LogError("Task_list_by_page_cache_set", err)
             }
         }
@@ -312,12 +312,12 @@ func (h *Handler) ListByPage(c *gin.Context) {
 
     // Set headers
     setEtagHeader(c, etag)
-    c.Header("Last-Modified", lastModified)
+    c.Header(headerLastModified, lastModified)
 
     // Cache the response with tags
     if !forceFresh {
         if err := h.cache.SetWithTags(cacheKey, response, utils.DefaultCacheTime, 
-            "tasks:list", fmt.Sprintf("tasks:page:%d", query.Page)); err != nil {
+            taskServiceListRef, fmt.Sprintf("tasks:page:%d", query.Page)); err != nil {
             h.errorLogService.LogError("Task_list_by_page_cache_set", err)
         }
     }
@@ -373,7 +373,7 @@ func (h *Handler) Create(c *gin.Context) {
     }
 
     // Invalidate all task-related caches
-    if err := h.cache.InvalidateByTags("tasks:list"); err != nil {
+    if err := h.cache.InvalidateByTags(taskServiceListRef); err != nil {
         h.errorLogService.LogError("Task_create_cache_invalidation_tags", err)
     }
 
@@ -438,17 +438,17 @@ func (h *Handler) Update(c *gin.Context) {
     }
 
     // 1. Invalidate by tags
-    if err := h.cache.InvalidateByTags("tasks:list", fmt.Sprintf("task:%d", id)); err != nil {
+    if err := h.cache.InvalidateByTags(taskServiceListRef, fmt.Sprintf(errTaskReference, id)); err != nil {
         h.errorLogService.LogError("Task_update_cache_invalidation_tags", err)
     }
     
     // 2. Also directly invalidate specific item cache
-    if err := h.cache.Delete(fmt.Sprintf("task_%d", id)); err != nil {
+    if err := h.cache.Delete(fmt.Sprintf(taskCacheKey, id)); err != nil {
         h.errorLogService.LogError("Task_update_cache_invalidation_item", err)
     }
     
     // 3. Invalidate all page caches since we don't know which pages this task appears on
-    if err := h.cache.Delete("tasks_page_*"); err != nil {
+    if err := h.cache.Delete(taskPageCacheName); err != nil {
         h.errorLogService.LogError("Task_update_cache_invalidation_pages", err)
     }
     
@@ -492,7 +492,7 @@ func (h *Handler) Done(c *gin.Context) {
     }
 
     // 1. Invalidate by tags (if your cache.InvalidateByTags is robust)
-    if err := h.cache.InvalidateByTags("tasks:list", fmt.Sprintf("task:%d", id)); err != nil {
+    if err := h.cache.InvalidateByTags(taskServiceListRef, fmt.Sprintf(errTaskReference, id)); err != nil {
         h.errorLogService.LogError("Task_done_cache_invalidation_tags", err)
     }
     
@@ -501,11 +501,11 @@ func (h *Handler) Done(c *gin.Context) {
         h.errorLogService.LogError("Task_done_cache_invalidation_cursor", err)
     }
 
-    if err := h.cache.Delete("tasks_page_*"); err != nil {
+    if err := h.cache.Delete(taskPageCacheName); err != nil {
         h.errorLogService.LogError("Task_done_cache_invalidation_pages", err)
     }
 
-    if err := h.cache.Delete(fmt.Sprintf("task_%d", updatedTask.ID)); err != nil {
+    if err := h.cache.Delete(fmt.Sprintf(taskCacheKey, updatedTask.ID)); err != nil {
         h.errorLogService.LogError("Task_done_cache_invalidation_item", err)
     }
     
@@ -539,17 +539,17 @@ func (h *Handler) Delete(c *gin.Context) {
     }
 
     // 1. Invalidate by tags
-    if err := h.cache.InvalidateByTags("tasks:list", fmt.Sprintf("task:%d", id)); err != nil {
+    if err := h.cache.InvalidateByTags(taskServiceListRef, fmt.Sprintf(errTaskReference, id)); err != nil {
         h.errorLogService.LogError("Task_delete_cache_invalidation_tags", err)
     }
     
     // 2. Also directly invalidate specific cache entries
-    if err := h.cache.Delete(fmt.Sprintf("task_%d", id)); err != nil {
+    if err := h.cache.Delete(fmt.Sprintf(taskCacheKey, id)); err != nil {
         h.errorLogService.LogError("Task_delete_cache_invalidation_item", err)
     }
     
     // 3. Invalidate all page caches
-    if err := h.cache.Delete("tasks_page_*"); err != nil {
+    if err := h.cache.Delete(taskPageCacheName); err != nil {
         h.errorLogService.LogError("Task_delete_cache_invalidation_pages", err)
     }
     
@@ -582,16 +582,16 @@ func setEtagHeader(c *gin.Context, etag string) {
 func addCacheHeaders(c *gin.Context, isModifying bool) {
     if isModifying {
         // For POST, PUT, DELETE - tell browser not to cache
-        c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+        c.Header(headerCacheControl, "no-cache, no-store, must-revalidate")
         c.Header("Pragma", "no-cache")
         c.Header("Expires", "0")
     } else {
         // For GET - allow short caching
         if strings.Contains(c.Request.URL.Path, "/list") {
-            c.Header("Cache-Control", "no-cache, max-age=0")
+            c.Header(headerCacheControl, "no-cache, max-age=0")
         } else {
             // Individual item endpoints can cache longer
-            c.Header("Cache-Control", "private, max-age=60")
+            c.Header(headerCacheControl, "private, max-age=60")
         }
         c.Header("Vary", "Authorization")
     }
