@@ -172,7 +172,7 @@ func generateETag(tasks []*models.Task) string {
     hash := sha256.New()
     if len(tasks) == 0 {
         hash.Write([]byte("empty-task-list"))
-        return fmt.Sprintf("W/\"%x\"", hash.Sum(nil))
+        return fmt.Sprintf(eTagCharacterFmt, hash.Sum(nil))
     }
     
     // Otherwise, hash based on task contents
@@ -188,7 +188,7 @@ func generateETag(tasks []*models.Task) string {
     }
     
     // Use weak ETag format (W/"hash") for better compatibility
-    return fmt.Sprintf("W/\"%x\"", hash.Sum(nil))
+    return fmt.Sprintf(eTagCharacterFmt, hash.Sum(nil))
 }
 
 func generateTaskETag(task *models.Task) string {
@@ -205,5 +205,5 @@ func generateTaskETag(task *models.Task) string {
         task.Owner,
         task.UpdatedAt.UnixNano())))
     
-    return fmt.Sprintf("W/\"%x\"", hash.Sum(nil))
+    return fmt.Sprintf(eTagCharacterFmt, hash.Sum(nil))
 }
