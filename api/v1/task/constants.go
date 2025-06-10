@@ -9,5 +9,5 @@ const (
 	headerCacheControl = "Cache-Control"
 	taskCacheKey = "task_%d"
 	taskPageCacheName = "task_page_*"
-
+	eTagCharacterFmt = "W/\"%x\""
 )
