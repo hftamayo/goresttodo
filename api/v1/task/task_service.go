@@ -98,35 +98,42 @@ func (s *TaskService) List(cursor string, limit int, order string) ([]*models.Ta
     return tasks, nextCursor, prevCursor, totalCount, nil
 }
 
+// validateTaskExistence checks if a task exists and hasn't been modified
+func (s *TaskService) validateTaskExistence(id int, cachedTask *models.Task) (*models.Task, error) {
+    existingTask, err := s.repo.ListById(id)
+    if err != nil {
+        return nil, fmt.Errorf("failed to verify task existence: %w", err)
+    }
+
+    // If task doesn't exist anymore, invalidate cache and return error
+    if existingTask == nil {
+        if err := s.cache.InvalidateByTags(fmt.Sprintf(errTaskReference, id)); err != nil {
+            fmt.Printf(errInvalidateCacheFmt, err)
+        }
+        return nil, fmt.Errorf("task with id %d not found", id)
+    }
+
+    // If task exists and hasn't been modified, return cached version
+    if cachedTask != nil && cachedTask.UpdatedAt.Equal(existingTask.UpdatedAt) {
+        return cachedTask, nil
+    }
+
+    // If task has been modified, invalidate cache and continue
+    if err := s.cache.InvalidateByTags(fmt.Sprintf(errTaskReference, id)); err != nil {
+        fmt.Printf(errInvalidateCacheFmt, err)
+    }
+
+    return existingTask, nil
+}
+
+// ListById retrieves a task by its ID
 func (s *TaskService) ListById(id int) (*models.Task, error) {
     cacheKey := fmt.Sprintf("task_%d", id)
     var task *models.Task
 
     // Try to get from cache first
     if err := s.cache.Get(cacheKey, &task); err == nil {
-        // Verify the task still exists and hasn't been modified
-        existingTask, err := s.repo.ListById(id)
-        if err != nil {
-            return nil, fmt.Errorf("failed to verify task existence: %w", err)
-        }
-
-        // If task doesn't exist anymore, invalidate cache and return error
-        if existingTask == nil {
-            if err := s.cache.InvalidateByTags(fmt.Sprintf(errTaskReference, id)); err != nil {
-                fmt.Printf(errInvalidateCacheFmt, err)
-            }
-            return nil, fmt.Errorf(errTaskNotFoundFmt, id)
-        }
-
-        // If task exists and hasn't been modified, return cached version
-        if task != nil && task.UpdatedAt.Equal(existingTask.UpdatedAt) {
-            return task, nil
-        }
-
-        // If task has been modified, invalidate cache and continue
-        if err := s.cache.InvalidateByTags(fmt.Sprintf(errTaskReference, id)); err != nil {
-            fmt.Printf(errInvalidateCacheFmt, err)
-        }
+        return s.validateTaskExistence(id, task)
     }
 
     // Get fresh data from repository
@@ -136,7 +143,7 @@ func (s *TaskService) ListById(id int) (*models.Task, error) {
     }
 
     if task == nil {
-        return nil, fmt.Errorf(errTaskNotFoundFmt, id)
+        return nil, fmt.Errorf("task with id %d not found", id)
     }
 
     // Cache the result with tags
@@ -246,9 +253,9 @@ func (s *TaskService) Delete(id int) error {
     return nil
 }
 
-func (s *TaskService) ListByPage(page int, limit int, order string) ([]*models.Task, int64, error) {
-    // Try to get from cache first
-    cacheKey := fmt.Sprintf("tasks_page_%d_limit_%d_order_%s", page, limit, order)
+// ListByPage retrieves a paginated list of tasks
+func (s *TaskService) ListByPage(page, limit int, order string) ([]*models.Task, int64, error) {
+    cacheKey := fmt.Sprintf("tasks_page_%d_%d_%s", page, limit, order)
     var cachedData struct {
         Tasks      []*models.Task `json:"tasks"`
         TotalCount int64         `json:"totalCount"`
@@ -267,7 +274,7 @@ func (s *TaskService) ListByPage(page int, limit int, order string) ([]*models.T
         }
 
         // If total count doesn't match, invalidate cache and continue
-        if err := s.cache.InvalidateByTags(taskServiceListRef); err != nil {
+        if err := s.cache.InvalidateByTags("tasks:list"); err != nil {
             fmt.Printf(errInvalidateCacheFmt, err)
         }
     }
@@ -285,7 +292,7 @@ func (s *TaskService) ListByPage(page int, limit int, order string) ([]*models.T
     }{
         Tasks:      tasks,
         TotalCount: totalCount,
-    }, utils.DefaultCacheTime, taskServiceListRef, fmt.Sprintf("tasks:page:%d", page)); err != nil {
+    }, utils.DefaultCacheTime, "tasks:list", fmt.Sprintf("tasks:page:%d", page)); err != nil {
         fmt.Printf("Failed to cache tasks: %v\n", err)
     }
 
