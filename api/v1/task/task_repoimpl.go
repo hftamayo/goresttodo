@@ -3,9 +3,10 @@ package task
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/hftamayo/gotodo/api/v1/models"
-	"github.com/hftamayo/gotodo/pkg/cursor"
+	"github.com/hftamayo/gotodo/pkg/utils"
 	"gorm.io/gorm"
 )
 
@@ -13,17 +14,11 @@ type TaskRepositoryImpl struct {
 	db *gorm.DB
 }
 
-const (
-    defaultLimit = 10
-    maxLimit    = 100
-)
-
 func NewTaskRepositoryImpl(db *gorm.DB) TaskRepository {
-	if db == nil {
-		fmt.Errorf("database connection is required")
-		return nil
-	}
-	return &TaskRepositoryImpl{db: db}
+    if db == nil {
+        return nil
+    }
+    return &TaskRepositoryImpl{db: db}
 }
 
 func (r *TaskRepositoryImpl) GetTotalCount() (int64, error) {
@@ -36,54 +31,75 @@ func (r *TaskRepositoryImpl) GetTotalCount() (int64, error) {
     return count, nil
 }
 
-func (r *TaskRepositoryImpl) List(limit int, cursorStr string) ([]*models.Task, string, error) {
+// validateListParams validates the list parameters
+func (r *TaskRepositoryImpl) validateListParams(limit int, order string) error {
     if limit <= 0 {
-        limit = defaultLimit
+        return fmt.Errorf("limit must be greater than 0")
     }
-    if limit > maxLimit {
-        limit = maxLimit
+    if order != "asc" && order != "desc" {
+        return fmt.Errorf("order must be either 'asc' or 'desc'")
+    }
+    return nil
+}
+
+// parseCursor parses the cursor string into a timestamp
+func (r *TaskRepositoryImpl) parseCursor(cursorStr string) (time.Time, error) {
+    if cursorStr == "" {
+        return time.Time{}, nil
+    }
+    return time.Parse(time.RFC3339, cursorStr)
+}
+
+// buildListQuery builds the base query for listing tasks
+func (r *TaskRepositoryImpl) buildListQuery(order string) *gorm.DB {
+    query := r.db.Model(&models.Task{})
+    if order == "asc" {
+        query = query.Order("created_at asc")
+    } else {
+        query = query.Order("created_at desc")
+    }
+    return query
+}
+
+// List retrieves a list of tasks with pagination
+func (r *TaskRepositoryImpl) List(limit int, cursorStr string, order string) ([]*models.Task, string, string, error) {
+    if err := r.validateListParams(limit, order); err != nil {
+        return nil, "", "", err
     }
 
-    query := r.db.Model(&models.Task{}).
-    Order("created_at DESC, id DESC").
-    Select("id, title, description, done, owner, created_at, updated_at")
-    // If cursor is provided, decode and apply conditions
-    if cursorStr != "" {
-        c, err := cursor.Decode[uint](cursorStr)
-        if err != nil {
-            return nil, "", fmt.Errorf("invalid cursor: %w", err)
+    cursor, err := r.parseCursor(cursorStr)
+    if err != nil {
+        return nil, "", "", fmt.Errorf("invalid cursor: %w", err)
+    }
+
+    query := r.buildListQuery(order)
+    if !cursor.IsZero() {
+        if order == "asc" {
+            query = query.Where("created_at > ?", cursor)
+        } else {
+            query = query.Where("created_at < ?", cursor)
         }
-        
-        query = query.Where("(created_at < ?) OR (created_at = ? AND id < ?)", 
-            c.Timestamp, 
-            c.Timestamp, 
-            c.ID)
     }
 
     var tasks []*models.Task
     if err := query.Limit(limit + 1).Find(&tasks).Error; err != nil {
-        return nil, "", fmt.Errorf("failed to fetch tasks: %w", err)
+        return nil, "", "", fmt.Errorf("failed to list tasks: %w", err)
     }
 
-    var nextCursor string
-    hasMore := len(tasks) > limit
-
-    if hasMore {
-        lastTask := tasks[len(tasks)-1]
-        c := cursor.Cursor[uint]{
-            ID:        lastTask.ID,
-            Timestamp: lastTask.CreatedAt,
-        }
-        nextCursor, _ = cursor.Encode(c, cursor.Options{
-            Field:     "created_at",
-            Direction: "DESC",
-        })
+    var nextCursor, prevCursor string
+    if len(tasks) > limit {
         tasks = tasks[:limit]
+        if len(tasks) > 0 {
+            nextCursor = tasks[len(tasks)-1].CreatedAt.Format(time.RFC3339)
+        }
     }
 
-    return tasks, nextCursor, nil
-}
+    if len(tasks) > 0 {
+        prevCursor = tasks[0].CreatedAt.Format(time.RFC3339)
+    }
 
+    return tasks, nextCursor, prevCursor, nil
+}
 
 func (r *TaskRepositoryImpl) ListById(id int) (*models.Task, error) {
     if id < 1 {
@@ -100,6 +116,20 @@ func (r *TaskRepositoryImpl) ListById(id int) (*models.Task, error) {
 		return nil, result.Error
 	}
 	return &task, nil
+}
+
+func (r *TaskRepositoryImpl) SearchByTitle(title string) (*models.Task, error) {
+    var task models.Task
+    
+    result := r.db.Where("title = ? AND deleted_at IS NULL", title).First(&task)
+    if result.Error != nil {
+        if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+            return nil, nil // No task found with this title
+        }
+        return nil, fmt.Errorf("error searching task by title: %w", result.Error)
+    }
+    
+    return &task, nil
 }
 
 func (r *TaskRepositoryImpl) Create(task *models.Task) (*models.Task, error) {
@@ -121,7 +151,7 @@ func (r *TaskRepositoryImpl) Update(id int, task *models.Task) (*models.Task, er
      var existingTask models.Task
     if err := r.db.First(&existingTask, id).Error; err != nil {
         if errors.Is(err, gorm.ErrRecordNotFound) {
-            return nil, fmt.Errorf("task not found: %d", id)
+            return nil, fmt.Errorf(errTaskNotFoundFmt, id)
         }
         return nil, fmt.Errorf("failed to verify task existence: %w", err)
     }
@@ -158,7 +188,7 @@ func (r *TaskRepositoryImpl) MarkAsDone(id int) (*models.Task, error) {
         return nil, fmt.Errorf("failed to mark task as done: %w", result.Error)
     }
     if result.RowsAffected == 0 {
-        return nil, fmt.Errorf("task not found: %d", id)
+        return nil, fmt.Errorf(errTaskNotFoundFmt, id)
     }
     
     if err := r.db.First(&task, id).Error; err != nil {
@@ -180,8 +210,48 @@ func (r *TaskRepositoryImpl) Delete(id int) error {
     }
 
     if result.RowsAffected == 0 {
-        return fmt.Errorf("task not found: %d", id)
+        return fmt.Errorf(errTaskNotFoundFmt, id)
     }
 
     return nil
+}
+
+func (r *TaskRepositoryImpl) ListByPage(page int, limit int, order string) ([]*models.Task, int64, error) {
+    if page <= 0 {
+        page = 1
+    }
+    if limit <= 0 {
+        limit = utils.DefaultLimit
+    }
+    if limit > utils.MaxLimit {
+        limit = utils.MaxLimit
+    }
+
+    // Default order if not provided
+    if order == "" {
+        order = utils.DefaultOrder
+    }
+
+    // Calculate offset
+    offset := (page - 1) * limit
+
+    // Get total count
+    var totalCount int64
+    if err := r.db.Model(&models.Task{}).Count(&totalCount).Error; err != nil {
+        return nil, 0, fmt.Errorf("failed to get total count: %w", err)
+    }
+
+    // Get paginated data
+    var tasks []*models.Task
+    query := r.db.Model(&models.Task{}).
+        Order(fmt.Sprintf("created_at %s, id %s", order, order)).
+        Select("id, title, description, done, owner, created_at, updated_at").
+        Offset(offset).
+        Limit(limit)
+
+    if err := query.Find(&tasks).Error; err != nil {
+        return nil, 0, fmt.Errorf("failed to fetch tasks: %w", err)
+    }
+
+    return tasks, totalCount, nil
 }

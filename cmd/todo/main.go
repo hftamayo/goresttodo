@@ -54,7 +54,7 @@ func main() {
 	//setting up the rate limiter
 	fmt.Printf("setting up the rate limiter...\n")
 	rateLimiter := config.SetupRateLimiter(redisClient, 100, time.Minute)
-	r.Use(middleware.RateLimitMiddleware(rateLimiter))
+	r.Use(middleware.RateLimiter(rateLimiter))
 
 	fmt.Printf("Setting up routes... \n")
 	routes.SetupRouter(r, db, redisClient, cache)

@@ -3,16 +3,10 @@ package task
 import (
 	"encoding/json"
 	"fmt"
-	"time"
+	"math"
 
 	"github.com/hftamayo/gotodo/api/v1/models"
 	"github.com/hftamayo/gotodo/pkg/utils"
-)
-
-const (
-    defaultCacheTime        = 10 * time.Minute
-    serviceDefaultLimit     = 10
-    serviceMaxLimit         = 100
 )
 
 type TaskService struct {
@@ -24,7 +18,7 @@ var _ TaskServiceInterface = (*TaskService)(nil)
 
 var cachedData struct {
     Tasks      []*models.Task        `json:"tasks"`
-    Pagination CursorPaginationMeta  `json:"pagination"`
+    Pagination PaginationMeta  `json:"pagination"`
     TotalCount int64          `json:"totalCount"`
 }
 
@@ -32,54 +26,117 @@ func NewTaskService(repo TaskRepository, cache *utils.Cache) TaskServiceInterfac
 	return &TaskService{repo: repo, cache: cache}
 }
 
-func (s *TaskService) List(cursor string, limit int) ([]*models.Task, string, int64, error) {
+func (s *TaskService) List(cursor string, limit int, order string) ([]*models.Task, string, string, int64, error) {
+    // Use the validation helper
+    query := validatePaginationQuery(CursorPaginationQuery{
+        Cursor: cursor,
+        Limit:  limit,
+        Order:  order,
+    })
+
     // Try to get from cache first
-    cacheKey := fmt.Sprintf("tasks_cursor_%s_limit_%d", cursor, limit)
+    cacheKey := fmt.Sprintf("tasks_cursor_%s_limit_%d_order_%s", 
+        query.Cursor, query.Limit, query.Order)
     if err := s.cache.Get(cacheKey, &cachedData); err == nil {
-        return cachedData.Tasks, cachedData.Pagination.NextCursor, cachedData.TotalCount, nil
+        return cachedData.Tasks, cachedData.Pagination.NextCursor, 
+            cachedData.Pagination.PrevCursor, cachedData.TotalCount, nil
     }
 
-    // Get from repository
-    tasks, nextCursor, err := s.repo.List(limit, cursor)
+    // Get from repository with extra record for hasMore check
+    tasks, nextCursor, prevCursor, err := s.repo.List(query.Limit+1, 
+        query.Cursor, query.Order)
     if err != nil {
-        return nil, "", 0, fmt.Errorf("failed to list tasks: %w", err)
+        return nil, "", "", 0, fmt.Errorf("failed to list tasks: %w", err)
     }
 
     // Get total count
     totalCount, err := s.repo.GetTotalCount()
     if err != nil {
-        return nil, "", 0, fmt.Errorf("failed to get total count: %w", err)
+        return nil, "", "", 0, fmt.Errorf("failed to get total count: %w", err)
+    }
+
+    // Handle hasMore and slice tasks
+    hasMore := len(tasks) > limit
+    if hasMore {
+        tasks = tasks[:limit] // Remove the extra record
+    }
+
+    // Calculate pagination metadata
+    totalPages := int(math.Ceil(float64(totalCount) / float64(limit)))
+    currentPage := 1
+    if cursor != "" {
+        // For cursor-based pagination, we don't need to calculate current page
+        // as it's not relevant to the user
+        currentPage = 0
     }
 
     cacheData := struct {
-        Tasks      []*models.Task       `json:"tasks"`
-        Pagination CursorPaginationMeta `json:"pagination"`
-        TotalCount int64               `json:"totalCount"`
+        Tasks      []*models.Task  `json:"tasks"`
+        Pagination PaginationMeta  `json:"pagination"`
+        TotalCount int64          `json:"totalCount"`
     }{
         Tasks: tasks,
-        Pagination: CursorPaginationMeta{
-            NextCursor: nextCursor,
-            HasMore:    nextCursor != "",
-            Count:      len(tasks),
+        Pagination: PaginationMeta{
+            NextCursor:  nextCursor,
+            PrevCursor:  prevCursor,
+            HasMore:     hasMore,
+            Limit:       limit,
+            TotalCount:  totalCount,
+            CurrentPage: currentPage,
+            TotalPages:  totalPages,
+            Order:       order,
         },
         TotalCount: totalCount,
     }
     
+    
+
     if cacheBytes, err := json.Marshal(cacheData); err == nil {
-        s.cache.Set(cacheKey, string(cacheBytes), defaultCacheTime)
+        s.cache.Set(cacheKey, string(cacheBytes), utils.DefaultCacheTime)
     }
 
-    return tasks, nextCursor, totalCount, nil
+    return tasks, nextCursor, prevCursor, totalCount, nil
 }
 
-func (s *TaskService) ListById(id int) (*models.Task, error) {
-	var task *models.Task
-    cacheKey := fmt.Sprintf("task_%d", id)
-
-    if err := s.cache.Get(cacheKey, &task); err == nil {
-        return task, nil
+// validateTaskExistence checks if a task exists and hasn't been modified
+func (s *TaskService) validateTaskExistence(id int, cachedTask *models.Task) (*models.Task, error) {
+    existingTask, err := s.repo.ListById(id)
+    if err != nil {
+        return nil, fmt.Errorf("failed to verify task existence: %w", err)
     }
 
+    // If task doesn't exist anymore, invalidate cache and return error
+    if existingTask == nil {
+        if err := s.cache.InvalidateByTags(fmt.Sprintf(errTaskReference, id)); err != nil {
+            fmt.Printf(errInvalidateCacheFmt, err)
+        }
+        return nil, fmt.Errorf("task with id %d not found", id)
+    }
+
+    // If task exists and hasn't been modified, return cached version
+    if cachedTask != nil && cachedTask.UpdatedAt.Equal(existingTask.UpdatedAt) {
+        return cachedTask, nil
+    }
+
+    // If task has been modified, invalidate cache and continue
+    if err := s.cache.InvalidateByTags(fmt.Sprintf(errTaskReference, id)); err != nil {
+        fmt.Printf(errInvalidateCacheFmt, err)
+    }
+
+    return existingTask, nil
+}
+
+// ListById retrieves a task by its ID
+func (s *TaskService) ListById(id int) (*models.Task, error) {
+    cacheKey := fmt.Sprintf("task_%d", id)
+    var task *models.Task
+
+    // Try to get from cache first
+    if err := s.cache.Get(cacheKey, &task); err == nil {
+        return s.validateTaskExistence(id, task)
+    }
+
+    // Get fresh data from repository
     task, err := s.repo.ListById(id)
     if err != nil {
         return nil, fmt.Errorf("failed to get task by id: %w", err)
@@ -89,7 +146,12 @@ func (s *TaskService) ListById(id int) (*models.Task, error) {
         return nil, fmt.Errorf("task with id %d not found", id)
     }
 
-    s.cache.Set(cacheKey, task, 10*time.Minute)
+    // Cache the result with tags
+    if err := s.cache.SetWithTags(cacheKey, task, utils.DefaultCacheTime, 
+        fmt.Sprintf(errTaskReference, id)); err != nil {
+        fmt.Printf("Failed to cache task: %v\n", err)
+    }
+
     return task, nil
 }
 
@@ -98,13 +160,25 @@ func (s *TaskService) Create(task *models.Task) (*models.Task, error) {
         return nil, fmt.Errorf("invalid task data")
     }
 
+    existingTask, err := s.repo.SearchByTitle(task.Title)
+    if err != nil {
+        return nil, fmt.Errorf("failed to check for duplicate title: %w", err)
+    }
+
+    if existingTask != nil {
+        return nil, fmt.Errorf("task with title %s already exists", task.Title)
+    }
+
     createdTask, err := s.repo.Create(task)
     if err != nil {
         return nil, fmt.Errorf("failed to create task: %w", err)
     }
 
-    // Invalidate list cache
-    s.cache.Delete("tasks_list*")
+    // Invalidate all task-related caches
+    if err := s.cache.InvalidateByTags(taskServiceListRef); err != nil {
+        fmt.Printf(errInvalidateCacheFmt, err)
+    }
+
     return createdTask, nil
 }
 
@@ -123,7 +197,7 @@ func (s *TaskService) Update(id int, task *models.Task) (*models.Task, error) {
     }
 
     if existingTask == nil {
-        return nil, fmt.Errorf("task with id %d not found", task.ID)
+        return nil, fmt.Errorf(errTaskNotFoundFmt, task.ID)
     }
 
     // Prevent modification of immutable fields
@@ -131,13 +205,15 @@ func (s *TaskService) Update(id int, task *models.Task) (*models.Task, error) {
     task.CreatedAt = existingTask.CreatedAt    
 
     updatedTask, err := s.repo.Update(id, task)
-     if err != nil {
+    if err != nil {
         return nil, fmt.Errorf("failed to update task: %w", err)
     }
 
-    // Invalidate caches
-    s.cache.Delete(fmt.Sprintf("task_%d", task.ID))
-    s.cache.Delete("tasks_list*")
+    // Invalidate all task-related caches
+    if err := s.cache.InvalidateByTags(taskServiceListRef, fmt.Sprintf(errTaskReference, id)); err != nil {
+        fmt.Printf(errInvalidateCacheFmt, err)
+    }
+
     return updatedTask, nil
 }
 
@@ -148,7 +224,7 @@ func (s *TaskService) MarkAsDone(id int) (*models.Task, error) {
     }
 
     if existingTask == nil {
-        return nil, fmt.Errorf("task with id %d not found", id)
+        return nil, fmt.Errorf(errTaskNotFoundFmt, id)
     }
 
     updatedTask, err := s.repo.MarkAsDone(id)
@@ -156,9 +232,11 @@ func (s *TaskService) MarkAsDone(id int) (*models.Task, error) {
         return nil, fmt.Errorf("failed to mark task as done: %w", err)
     }
 
-    // Invalidate caches
-    s.cache.Delete(fmt.Sprintf("task_%d", id))
-    s.cache.Delete("tasks_list*")
+    // Invalidate all task-related caches
+    if err := s.cache.InvalidateByTags(taskServiceListRef, fmt.Sprintf(errTaskReference, id)); err != nil {
+        fmt.Printf(errInvalidateCacheFmt, err)
+    }
+
     return updatedTask, nil
 }
 
@@ -167,8 +245,56 @@ func (s *TaskService) Delete(id int) error {
         return fmt.Errorf("failed to delete task: %w", err)
     }
 
-    // Invalidate caches
-    s.cache.Delete(fmt.Sprintf("task_%d", id))
-    s.cache.Delete("tasks_list*")
+    // Invalidate all task-related caches
+    if err := s.cache.InvalidateByTags(taskServiceListRef, fmt.Sprintf(errTaskReference, id)); err != nil {
+        fmt.Printf(errInvalidateCacheFmt, err)
+    }
+
     return nil
+}
+
+// ListByPage retrieves a paginated list of tasks
+func (s *TaskService) ListByPage(page, limit int, order string) ([]*models.Task, int64, error) {
+    cacheKey := fmt.Sprintf("tasks_page_%d_%d_%s", page, limit, order)
+    var cachedData struct {
+        Tasks      []*models.Task `json:"tasks"`
+        TotalCount int64         `json:"totalCount"`
+    }
+    
+    if err := s.cache.Get(cacheKey, &cachedData); err == nil {
+        // If we have cached data, verify it's still valid
+        totalCount, err := s.repo.GetTotalCount()
+        if err != nil {
+            return nil, 0, fmt.Errorf("failed to get total count: %w", err)
+        }
+
+        // If total count matches, return cached data
+        if totalCount == cachedData.TotalCount {
+            return cachedData.Tasks, cachedData.TotalCount, nil
+        }
+
+        // If total count doesn't match, invalidate cache and continue
+        if err := s.cache.InvalidateByTags("tasks:list"); err != nil {
+            fmt.Printf(errInvalidateCacheFmt, err)
+        }
+    }
+
+    // Get fresh data from repository
+    tasks, totalCount, err := s.repo.ListByPage(page, limit, order)
+    if err != nil {
+        return nil, 0, fmt.Errorf("failed to list tasks by page: %w", err)
+    }
+
+    // Cache the results with tags
+    if err := s.cache.SetWithTags(cacheKey, struct {
+        Tasks      []*models.Task `json:"tasks"`
+        TotalCount int64         `json:"totalCount"`
+    }{
+        Tasks:      tasks,
+        TotalCount: totalCount,
+    }, utils.DefaultCacheTime, "tasks:list", fmt.Sprintf("tasks:page:%d", page)); err != nil {
+        fmt.Printf("Failed to cache tasks: %v\n", err)
+    }
+
+    return tasks, totalCount, nil
 }
