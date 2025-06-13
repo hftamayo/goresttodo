@@ -3,9 +3,9 @@ package task
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/hftamayo/gotodo/api/v1/models"
-	"github.com/hftamayo/gotodo/pkg/cursor"
 	"github.com/hftamayo/gotodo/pkg/utils"
 	"gorm.io/gorm"
 )
@@ -31,109 +31,75 @@ func (r *TaskRepositoryImpl) GetTotalCount() (int64, error) {
     return count, nil
 }
 
-func (r *TaskRepositoryImpl) List(limit int, cursorStr string, order string) ([]*models.Task, string, string, error) {
+// validateListParams validates the list parameters
+func (r *TaskRepositoryImpl) validateListParams(limit int, order string) error {
     if limit <= 0 {
-        limit = DefaultLimit
+        return fmt.Errorf("limit must be greater than 0")
     }
-    if limit > MaxLimit {
-        limit = MaxLimit
+    if order != "asc" && order != "desc" {
+        return fmt.Errorf("order must be either 'asc' or 'desc'")
     }
+    return nil
+}
 
-    fmt.Printf("DEBUG: Starting List with limit=%d, cursor=%s\n", limit, cursorStr)
+// parseCursor parses the cursor string into a timestamp
+func (r *TaskRepositoryImpl) parseCursor(cursorStr string) (time.Time, error) {
+    if cursorStr == "" {
+        return time.Time{}, nil
+    }
+    return time.Parse(time.RFC3339, cursorStr)
+}
 
-    // Base query with deleted_at IS NULL condition
-    query := r.db.Model(&models.Task{}).
-        Where("deleted_at IS NULL").
-        Order("id DESC").  // Always order by id DESC to start from most recent
-        Select("id, title, description, done, owner, created_at, updated_at")
+// buildListQuery builds the base query for listing tasks
+func (r *TaskRepositoryImpl) buildListQuery(order string) *gorm.DB {
+    query := r.db.Model(&models.Task{})
+    if order == "asc" {
+        query = query.Order("created_at asc")
+    } else {
+        query = query.Order("created_at desc")
+    }
+    return query
+}
 
-    if cursorStr != "" {
-        c, err := cursor.Decode[uint](cursorStr)
-        if err != nil {
-            return nil, "", "", fmt.Errorf("invalid cursor: %w", err)
-        }
-        fmt.Printf("DEBUG: Decoded cursor - ID: %d\n", c.ID)
-
-        // Get all IDs less than the cursor ID
-        var ids []uint
-        if err := r.db.Model(&models.Task{}).
-            Where("deleted_at IS NULL AND id < ?", c.ID).
-            Pluck("id", &ids).Error; err != nil {
-            return nil, "", "", fmt.Errorf("failed to get IDs: %w", err)
-        }
-
-        // If we have no IDs, return empty result
-        if len(ids) == 0 {
-            return []*models.Task{}, "", "", nil
-        }
-
-        // Use the IDs in the query
-        query = query.Where("id IN ?", ids)
+// List retrieves a list of tasks with pagination
+func (r *TaskRepositoryImpl) List(limit int, cursorStr string, order string) ([]*models.Task, string, string, error) {
+    if err := r.validateListParams(limit, order); err != nil {
+        return nil, "", "", err
     }
 
-    // Log the SQL query
-    sql := query.ToSQL(func(tx *gorm.DB) *gorm.DB {
-        return tx.Session(&gorm.Session{DryRun: true})
-    })
-    fmt.Printf("DEBUG: SQL Query: %s\n", sql)
+    cursor, err := r.parseCursor(cursorStr)
+    if err != nil {
+        return nil, "", "", fmt.Errorf("invalid cursor: %w", err)
+    }
+
+    query := r.buildListQuery(order)
+    if !cursor.IsZero() {
+        if order == "asc" {
+            query = query.Where("created_at > ?", cursor)
+        } else {
+            query = query.Where("created_at < ?", cursor)
+        }
+    }
 
     var tasks []*models.Task
     if err := query.Limit(limit + 1).Find(&tasks).Error; err != nil {
-        return nil, "", "", fmt.Errorf("failed to fetch tasks: %w", err)
-    }
-
-    fmt.Printf("DEBUG: Found %d tasks\n", len(tasks))
-    for _, task := range tasks {
-        fmt.Printf("DEBUG: Task ID: %d\n", task.ID)
+        return nil, "", "", fmt.Errorf("failed to list tasks: %w", err)
     }
 
     var nextCursor, prevCursor string
-    hasMore := len(tasks) > limit
-
-    if hasMore {
-        // Get the last item before removing it
-        lastTask := tasks[len(tasks)-1]
-        tasks = tasks[:limit] // Remove the extra item
-        fmt.Printf("DEBUG: Has more pages, last task ID: %d\n", lastTask.ID)
-
-        // Create cursor for the next page
-        c := cursor.Cursor[uint]{
-            ID: lastTask.ID,
+    if len(tasks) > limit {
+        tasks = tasks[:limit]
+        if len(tasks) > 0 {
+            nextCursor = tasks[len(tasks)-1].CreatedAt.Format(time.RFC3339)
         }
-
-        var err error
-        nextCursor, err = cursor.Encode(c, cursor.Options{
-            Field:     "id",
-            Direction: "DESC",
-        })
-        if err != nil {
-            return nil, "", "", fmt.Errorf("failed to encode next cursor: %w", err)
-        }
-        fmt.Printf("DEBUG: Next cursor: %s\n", nextCursor)
     }
 
-    // Generate previous cursor from first item if we have tasks
     if len(tasks) > 0 {
-        firstTask := tasks[0]
-        fmt.Printf("DEBUG: First task ID: %d\n", firstTask.ID)
-        c := cursor.Cursor[uint]{
-            ID: firstTask.ID,
-        }
-
-        var err error
-        prevCursor, err = cursor.Encode(c, cursor.Options{
-            Field:     "id",
-            Direction: "DESC",
-        })
-        if err != nil {
-            return nil, "", "", fmt.Errorf("failed to encode previous cursor: %w", err)
-        }
-        fmt.Printf("DEBUG: Previous cursor: %s\n", prevCursor)
+        prevCursor = tasks[0].CreatedAt.Format(time.RFC3339)
     }
 
     return tasks, nextCursor, prevCursor, nil
 }
-
 
 func (r *TaskRepositoryImpl) ListById(id int) (*models.Task, error) {
     if id < 1 {

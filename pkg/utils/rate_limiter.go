@@ -2,130 +2,148 @@ package utils
 
 import (
 	"context"
-	"strconv"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 )
 
+// OperationType represents the type of operation being rate limited
 type OperationType string
+
 const (
-	OperationRead OperationType = "read"
-	OperationWrite OperationType = "write"
+	OperationRead     OperationType = "read"
+	OperationWrite    OperationType = "write"
 	OperationPrefetch OperationType = "prefetch"
 )
 
+// RateLimitConfig holds the configuration for rate limiting
+type RateLimitConfig struct {
+	MaxRequests int64 // Maximum number of requests allowed in the window
+	Window      int64 // Time window in seconds
+}
+
 type RateLimiter struct {
 	RedisClient *redis.Client
-    operationLimits map[OperationType]int
-    Window          time.Duration
-    mu              sync.RWMutex
-
+	operationLimits map[OperationType]int
+	Window          time.Duration
+	mu              sync.RWMutex
 }
 
 func NewRateLimiter(redisClient *redis.Client) *RateLimiter {
-    return &RateLimiter{
-        RedisClient: redisClient,
-        operationLimits: map[OperationType]int{
-            OperationRead:     100, 
-            OperationWrite:    30,  
-            OperationPrefetch: 200, 
-        },
-        Window: time.Minute, 
-        mu:     sync.RWMutex{},
-    }
+	return &RateLimiter{
+		RedisClient: redisClient,
+		operationLimits: map[OperationType]int{
+			OperationRead:     100, 
+			OperationWrite:    30,  
+			OperationPrefetch: 200, 
+		},
+		Window: time.Minute, 
+		mu:     sync.RWMutex{},
+	}
 }
 
 // SetLimitForOperation sets the rate limit for a specific operation type
 func (r *RateLimiter) SetLimitForOperation(op OperationType, limit int) {
-    r.mu.Lock()
-    defer r.mu.Unlock()
-    r.operationLimits[op] = limit
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.operationLimits[op] = limit
 }
 
 // GetLimitForOperation gets the rate limit for a specific operation type
 func (r *RateLimiter) GetLimitForOperation(op OperationType) int {
-    r.mu.RLock()
-    defer r.mu.RUnlock()
-    if limit, exists := r.operationLimits[op]; exists {
-        return limit
-    }
-    return r.operationLimits[OperationRead] // Default to read limit
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if limit, exists := r.operationLimits[op]; exists {
+		return limit
+	}
+	return r.operationLimits[OperationRead] // Default to read limit
 }
 
-// Allow checks if a request is allowed based on client ID and operation type
-func (r *RateLimiter) Allow(clientID string) (bool, error) {
-    allowed, _, _, err := r.AllowOperation(clientID, OperationRead)
-    return allowed, err
+// Allow checks if a request is allowed for a specific operation type
+func (r *RateLimiter) Allow(clientID string, op OperationType) (bool, int64, time.Time, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	// Get the appropriate rate limit configuration based on operation type
+	var config *RateLimitConfig
+	switch op {
+	case OperationRead:
+		config = &RateLimitConfig{
+			MaxRequests: 100, // Default read limit
+			Window:      60,  // 1 minute window
+		}
+	case OperationWrite:
+		config = &RateLimitConfig{
+			MaxRequests: 50, // Default write limit
+			Window:      60, // 1 minute window
+		}
+	case OperationPrefetch:
+		config = &RateLimitConfig{
+			MaxRequests: 200, // Default prefetch limit
+			Window:      60,  // 1 minute window
+		}
+	default:
+		return false, 0, time.Time{}, fmt.Errorf("unknown operation type: %s", op)
+	}
+
+	return r.AllowOperation(clientID, config)
 }
 
-// AllowOperation checks if a request is allowed for a specific operation type
-// and returns whether it's allowed, the limit, retry time, and any error
-func (r *RateLimiter) AllowOperation(clientID string, op OperationType) (bool, int, time.Time, error) {
-    ctx := context.Background()
-    
-    // Get the rate limit for this operation
-    limit := r.GetLimitForOperation(op)
-    
-    // Create a key that includes operation type
-    key := "ratelimit:" + clientID + ":" + string(op)
-    
-    // Get the current window
-    windowKey := key + ":window"
-    
-    // Check if we're in an existing window
-    windowStartStr, err := r.RedisClient.Get(ctx, windowKey).Result()
-    if err != nil && err != redis.Nil {
-        return false, limit, time.Time{}, err
-    }
-    
-    now := time.Now()
-    var windowStart time.Time
-    var requestCount int64
-    
-    if err == redis.Nil || windowStartStr == "" {
-        // No window exists, create a new one
-        windowStart = now
-        if err := r.RedisClient.Set(ctx, windowKey, now.Unix(), r.Window).Err(); err != nil {
-            return false, limit, time.Time{}, err
-        }
-    } else {
-        // Window exists, parse the timestamp
-        windowStartUnix, _ := strconv.ParseInt(windowStartStr, 10, 64)
-        windowStart = time.Unix(windowStartUnix, 0)
-        
-        // If window has expired, create a new one
-        if now.Sub(windowStart) > r.Window {
-            windowStart = now
-            if err := r.RedisClient.Set(ctx, windowKey, now.Unix(), r.Window).Err(); err != nil {
-                return false, limit, time.Time{}, err
-            }
-            // Reset count for new window
-            if err := r.RedisClient.Set(ctx, key, 0, r.Window).Err(); err != nil {
-                return false, limit, time.Time{}, err
-            }
-        }
-    }
-    
-    // Increment the counter and check if we're over limit
-    requestCount, err = r.RedisClient.Incr(ctx, key).Result()
-    if err != nil {
-        return false, limit, time.Time{}, err
-    }
-    
-    // Ensure the counter expires with the window
-    if err := r.RedisClient.Expire(ctx, key, r.Window).Err(); err != nil {
-        return false, limit, time.Time{}, err
-    }
-    
-    // Check if we're over the limit
-    if requestCount > int64(limit) {
-        // Calculate when the window will expire
-        timeUntilReset := r.Window - now.Sub(windowStart)
-        retryTime := now.Add(timeUntilReset)
-        return false, limit, retryTime, nil
-    }
-    
-    return true, limit, time.Time{}, nil
+// validateRateLimitConfig validates the rate limit configuration
+func validateRateLimitConfig(config *RateLimitConfig) error {
+	if config == nil {
+		return fmt.Errorf("rate limit config is nil")
+	}
+	if config.MaxRequests <= 0 {
+		return fmt.Errorf("max requests must be greater than 0")
+	}
+	if config.Window <= 0 {
+		return fmt.Errorf("window must be greater than 0")
+	}
+	return nil
+}
+
+// getRateLimitKey generates the Redis key for rate limiting
+func getRateLimitKey(identifier string, config *RateLimitConfig) string {
+	return fmt.Sprintf("rate_limit:%s:%d", identifier, config.Window)
+}
+
+// checkRateLimit checks if the operation is allowed based on current count
+func checkRateLimit(currentCount int64, config *RateLimitConfig) bool {
+	return currentCount <= config.MaxRequests
+}
+
+// AllowOperation checks if an operation is allowed based on rate limiting rules
+func (rl *RateLimiter) AllowOperation(identifier string, config *RateLimitConfig) (bool, int64, time.Time, error) {
+	if err := validateRateLimitConfig(config); err != nil {
+		return false, 0, time.Time{}, err
+	}
+
+	key := getRateLimitKey(identifier, config)
+	ctx := context.Background()
+	now := time.Now()
+
+	// Get current count
+	currentCount, err := rl.RedisClient.Incr(ctx, key).Result()
+	if err != nil {
+		return false, 0, time.Time{}, fmt.Errorf("failed to increment rate limit counter: %w", err)
+	}
+
+	// Set expiration if this is the first request
+	if currentCount == 1 {
+		if err := rl.RedisClient.Expire(ctx, key, time.Duration(config.Window)*time.Second).Err(); err != nil {
+			return false, 0, time.Time{}, fmt.Errorf("failed to set rate limit expiration: %w", err)
+		}
+	}
+
+	// Check if we're over the limit
+	if currentCount > config.MaxRequests {
+		// Calculate retry time based on window expiration
+		retryTime := now.Add(time.Duration(config.Window) * time.Second)
+		return false, config.MaxRequests, retryTime, nil
+	}
+
+	return true, config.MaxRequests, time.Time{}, nil
 }
