@@ -46,6 +46,56 @@ func (m *MockDB) Begin() *gorm.DB {
 	return args.Get(0).(*gorm.DB)
 }
 
+func (m *MockDB) Count(count *int64) *gorm.DB {
+	args := m.Called(count)
+	return args.Get(0).(*gorm.DB)
+}
+
+func (m *MockDB) Order(value interface{}) *gorm.DB {
+	args := m.Called(value)
+	return args.Get(0).(*gorm.DB)
+}
+
+func (m *MockDB) Select(query interface{}, args ...interface{}) *gorm.DB {
+	mockArgs := m.Called(query, args)
+	return mockArgs.Get(0).(*gorm.DB)
+}
+
+func (m *MockDB) Offset(offset int) *gorm.DB {
+	args := m.Called(offset)
+	return args.Get(0).(*gorm.DB)
+}
+
+func (m *MockDB) Limit(limit int) *gorm.DB {
+	args := m.Called(limit)
+	return args.Get(0).(*gorm.DB)
+}
+
+func (m *MockDB) Find(dest interface{}, conds ...interface{}) *gorm.DB {
+	args := m.Called(dest, conds)
+	return args.Get(0).(*gorm.DB)
+}
+
+func (m *MockDB) Where(query interface{}, args ...interface{}) *gorm.DB {
+	mockArgs := m.Called(query, args)
+	return mockArgs.Get(0).(*gorm.DB)
+}
+
+func (m *MockDB) Updates(values interface{}) *gorm.DB {
+	args := m.Called(values)
+	return args.Get(0).(*gorm.DB)
+}
+
+func (m *MockDB) Commit() *gorm.DB {
+	args := m.Called()
+	return args.Get(0).(*gorm.DB)
+}
+
+func (m *MockDB) Rollback() *gorm.DB {
+	args := m.Called()
+	return args.Get(0).(*gorm.DB)
+}
+
 func TestNewTaskRepositoryImpl(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -184,7 +234,7 @@ func TestTaskRepositoryImpl_ListById(t *testing.T) {
 	}
 }
 
-func TestTaskRepositoryImpl_List(t *testing.T) {
+func TestTaskRepositoryImpl_ListByPage(t *testing.T) {
 	mockDB := new(MockDB)
 	repo := &TaskRepositoryImpl{db: mockDB}
 
@@ -211,93 +261,109 @@ func TestTaskRepositoryImpl_List(t *testing.T) {
 	}
 
 	tests := []struct {
-		name      string
-		limit     int
-		cursorStr string
-		setup     func()
-		want      []*models.Task
-		wantNext  string
-		wantErr   bool
+		name       string
+		page       int
+		limit      int
+		order      string
+		setup      func()
+		wantTasks  []*models.Task
+		wantCount  int64
+		wantErr    bool
 	}{
 		{
-			name:  "successful list with default limit",
+			name:  "successful list with default values",
+			page:  1,
 			limit: 0,
+			order: "",
 			setup: func() {
-				mockDB.On("Model", &models.Task{}).Return(&gorm.DB{})
-				mockDB.On("Order", "created_at DESC, id DESC").Return(&gorm.DB{})
-				mockDB.On("Select", "id, title, description, done, owner, created_at, updated_at").Return(&gorm.DB{})
-				mockDB.On("Limit", defaultLimit+1).Return(&gorm.DB{})
-				mockDB.On("Find", mock.Anything).Run(func(args mock.Arguments) {
-					arg := args.Get(0).(*[]*models.Task)
-					*arg = tasks[:1]
+				mockDB.On("Model", &models.Task{}).Return(mockDB)
+				mockDB.On("Count", mock.Anything).Run(func(args mock.Arguments) {
+					arg := args.Get(0).(*int64)
+					*arg = 2
 				}).Return(&gorm.DB{Error: nil})
-			},
-			want:     tasks[:1],
-			wantNext: "",
-			wantErr:  false,
-		},
-		{
-			name:  "successful list with custom limit",
-			limit: 2,
-			setup: func() {
-				mockDB.On("Model", &models.Task{}).Return(&gorm.DB{})
-				mockDB.On("Order", "created_at DESC, id DESC").Return(&gorm.DB{})
-				mockDB.On("Select", "id, title, description, done, owner, created_at, updated_at").Return(&gorm.DB{})
-				mockDB.On("Limit", 3).Return(&gorm.DB{})
+				mockDB.On("Order", "created_at desc, id desc").Return(mockDB)
+				mockDB.On("Select", "id, title, description, done, owner, created_at, updated_at").Return(mockDB)
+				mockDB.On("Offset", 0).Return(mockDB)
+				mockDB.On("Limit", utils.DefaultLimit).Return(mockDB)
 				mockDB.On("Find", mock.Anything).Run(func(args mock.Arguments) {
 					arg := args.Get(0).(*[]*models.Task)
 					*arg = tasks
 				}).Return(&gorm.DB{Error: nil})
 			},
-			want:     tasks,
-			wantNext: "",
-			wantErr:  false,
+			wantTasks: tasks,
+			wantCount: 2,
+			wantErr:   false,
 		},
 		{
-			name:      "successful list with cursor",
-			limit:     1,
-			cursorStr: "cursor123",
+			name:  "successful list with custom values",
+			page:  2,
+			limit: 1,
+			order: "asc",
 			setup: func() {
-				mockDB.On("Model", &models.Task{}).Return(&gorm.DB{})
-				mockDB.On("Order", "created_at DESC, id DESC").Return(&gorm.DB{})
-				mockDB.On("Select", "id, title, description, done, owner, created_at, updated_at").Return(&gorm.DB{})
-				mockDB.On("Where", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(&gorm.DB{})
-				mockDB.On("Limit", 2).Return(&gorm.DB{})
+				mockDB.On("Model", &models.Task{}).Return(mockDB)
+				mockDB.On("Count", mock.Anything).Run(func(args mock.Arguments) {
+					arg := args.Get(0).(*int64)
+					*arg = 2
+				}).Return(&gorm.DB{Error: nil})
+				mockDB.On("Order", "created_at asc, id asc").Return(mockDB)
+				mockDB.On("Select", "id, title, description, done, owner, created_at, updated_at").Return(mockDB)
+				mockDB.On("Offset", 1).Return(mockDB)
+				mockDB.On("Limit", 1).Return(mockDB)
 				mockDB.On("Find", mock.Anything).Run(func(args mock.Arguments) {
 					arg := args.Get(0).(*[]*models.Task)
-					*arg = tasks[:1]
+					*arg = tasks[1:2]
 				}).Return(&gorm.DB{Error: nil})
 			},
-			want:     tasks[:1],
-			wantNext: "",
-			wantErr:  false,
+			wantTasks: tasks[1:2],
+			wantCount: 2,
+			wantErr:   false,
 		},
 		{
-			name:  "database error",
-			limit: 1,
+			name:  "database error on count",
+			page:  1,
+			limit: 10,
+			order: "desc",
 			setup: func() {
-				mockDB.On("Model", &models.Task{}).Return(&gorm.DB{})
-				mockDB.On("Order", "created_at DESC, id DESC").Return(&gorm.DB{})
-				mockDB.On("Select", "id, title, description, done, owner, created_at, updated_at").Return(&gorm.DB{})
-				mockDB.On("Limit", 2).Return(&gorm.DB{})
+				mockDB.On("Model", &models.Task{}).Return(mockDB)
+				mockDB.On("Count", mock.Anything).Return(&gorm.DB{Error: assert.AnError})
+			},
+			wantTasks: nil,
+			wantCount: 0,
+			wantErr:   true,
+		},
+		{
+			name:  "database error on find",
+			page:  1,
+			limit: 10,
+			order: "desc",
+			setup: func() {
+				mockDB.On("Model", &models.Task{}).Return(mockDB)
+				mockDB.On("Count", mock.Anything).Run(func(args mock.Arguments) {
+					arg := args.Get(0).(*int64)
+					*arg = 2
+				}).Return(&gorm.DB{Error: nil})
+				mockDB.On("Order", "created_at desc, id desc").Return(mockDB)
+				mockDB.On("Select", "id, title, description, done, owner, created_at, updated_at").Return(mockDB)
+				mockDB.On("Offset", 0).Return(mockDB)
+				mockDB.On("Limit", 10).Return(mockDB)
 				mockDB.On("Find", mock.Anything).Return(&gorm.DB{Error: assert.AnError})
 			},
-			want:     nil,
-			wantNext: "",
-			wantErr:  true,
+			wantTasks: nil,
+			wantCount: 0,
+			wantErr:   true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setup()
-			got, next, err := repo.List(tt.limit, tt.cursorStr)
+			gotTasks, gotCount, err := repo.ListByPage(tt.page, tt.limit, tt.order)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tt.want, got)
-				assert.Equal(t, tt.wantNext, next)
+				assert.Equal(t, tt.wantTasks, gotTasks)
+				assert.Equal(t, tt.wantCount, gotCount)
 			}
 		})
 	}

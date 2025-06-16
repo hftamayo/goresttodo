@@ -15,13 +15,18 @@ type MockTaskRepository struct {
 	mock.Mock
 }
 
-func (m *MockTaskRepository) List(limit int, cursor string) ([]*models.Task, string, error) {
-	args := m.Called(limit, cursor)
-	return args.Get(0).([]*models.Task), args.String(1), args.Error(2)
+func (m *MockTaskRepository) List(limit int, cursor string, order string) ([]*models.Task, string, string, error) {
+	args := m.Called(limit, cursor, order)
+	return args.Get(0).([]*models.Task), args.String(1), args.String(2), args.Error(3)
 }
 
 func (m *MockTaskRepository) ListById(id int) (*models.Task, error) {
 	args := m.Called(id)
+	return args.Get(0).(*models.Task), args.Error(1)
+}
+
+func (m *MockTaskRepository) SearchByTitle(title string) (*models.Task, error) {
+	args := m.Called(title)
 	return args.Get(0).(*models.Task), args.Error(1)
 }
 
@@ -50,6 +55,11 @@ func (m *MockTaskRepository) GetTotalCount() (int64, error) {
 	return args.Get(0).(int64), args.Error(1)
 }
 
+func (m *MockTaskRepository) ListByPage(page int, limit int, order string) ([]*models.Task, int64, error) {
+	args := m.Called(page, limit, order)
+	return args.Get(0).([]*models.Task), args.Get(1).(int64), args.Error(2)
+}
+
 // MockCache is a mock implementation of utils.Cache
 type MockCache struct {
 	mock.Mock
@@ -67,6 +77,16 @@ func (m *MockCache) Set(key string, value interface{}, expiration time.Duration)
 
 func (m *MockCache) Delete(key string) error {
 	args := m.Called(key)
+	return args.Error(0)
+}
+
+func (m *MockCache) SetWithTags(key string, value interface{}, expiration time.Duration, tags ...string) error {
+	args := m.Called(key, value, expiration, tags)
+	return args.Error(0)
+}
+
+func (m *MockCache) InvalidateByTags(tags ...string) error {
+	args := m.Called(tags)
 	return args.Error(0)
 }
 
@@ -147,7 +167,7 @@ func TestTaskService_List(t *testing.T) {
 				mockCache.On("Set", "tasks_cursor__limit_10", mock.Anything, defaultCacheTime).Return(nil)
 			},
 			setupRepo: func() {
-				mockRepo.On("List", 10, "").Return(tasks, "", nil)
+				mockRepo.On("List", 10, "", "").Return(tasks, "", "", nil)
 				mockRepo.On("GetTotalCount").Return(int64(2), nil)
 			},
 			wantTasks:  tasks,
@@ -163,7 +183,7 @@ func TestTaskService_List(t *testing.T) {
 				mockCache.On("Get", "tasks_cursor__limit_10", mock.Anything).Return(assert.AnError)
 			},
 			setupRepo: func() {
-				mockRepo.On("List", 10, "").Return(nil, "", assert.AnError)
+				mockRepo.On("List", 10, "", "").Return(nil, "", "", assert.AnError)
 			},
 			wantTasks:  nil,
 			wantCursor: "",
@@ -176,7 +196,7 @@ func TestTaskService_List(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setupCache()
 			tt.setupRepo()
-			gotTasks, gotCursor, gotCount, err := service.List(tt.cursor, tt.limit)
+			gotTasks, gotCursor, gotCount, err := service.List(tt.cursor, tt.limit, "")
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -558,6 +578,109 @@ func TestTaskService_Delete(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestTaskService_ListByPage(t *testing.T) {
+	mockRepo := new(MockTaskRepository)
+	mockCache := new(MockCache)
+	service := NewTaskService(mockRepo, mockCache)
+
+	now := time.Now()
+	tasks := []*models.Task{
+		{
+			ID:          1,
+			Title:       "Task 1",
+			Description: "Description 1",
+			Done:        false,
+			Owner:       "test@example.com",
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		},
+		{
+			ID:          2,
+			Title:       "Task 2",
+			Description: "Description 2",
+			Done:        true,
+			Owner:       "test@example.com",
+			CreatedAt:   now.Add(-time.Hour),
+			UpdatedAt:   now.Add(-time.Hour),
+		},
+	}
+
+	tests := []struct {
+		name       string
+		page       int
+		limit      int
+		order      string
+		setupCache func()
+		setupRepo  func()
+		wantTasks  []*models.Task
+		wantCount  int64
+		wantErr    bool
+	}{
+		{
+			name:  "successful list with default values",
+			page:  1,
+			limit: 0,
+			order: "",
+			setupCache: func() {
+				mockCache.On("Get", "tasks_page_1_limit_10_order_desc", mock.Anything).Return(assert.AnError)
+				mockCache.On("Set", "tasks_page_1_limit_10_order_desc", mock.Anything, utils.DefaultCacheTime).Return(nil)
+			},
+			setupRepo: func() {
+				mockRepo.On("ListByPage", 1, utils.DefaultLimit, utils.DefaultOrder).Return(tasks, int64(2), nil)
+			},
+			wantTasks: tasks,
+			wantCount: 2,
+			wantErr:   false,
+		},
+		{
+			name:  "successful list with custom values",
+			page:  2,
+			limit: 1,
+			order: "asc",
+			setupCache: func() {
+				mockCache.On("Get", "tasks_page_2_limit_1_order_asc", mock.Anything).Return(assert.AnError)
+				mockCache.On("Set", "tasks_page_2_limit_1_order_asc", mock.Anything, utils.DefaultCacheTime).Return(nil)
+			},
+			setupRepo: func() {
+				mockRepo.On("ListByPage", 2, 1, "asc").Return(tasks[1:2], int64(2), nil)
+			},
+			wantTasks: tasks[1:2],
+			wantCount: 2,
+			wantErr:   false,
+		},
+		{
+			name:  "repository error",
+			page:  1,
+			limit: 10,
+			order: "desc",
+			setupCache: func() {
+				mockCache.On("Get", "tasks_page_1_limit_10_order_desc", mock.Anything).Return(assert.AnError)
+			},
+			setupRepo: func() {
+				mockRepo.On("ListByPage", 1, 10, "desc").Return(nil, int64(0), assert.AnError)
+			},
+			wantTasks: nil,
+			wantCount: 0,
+			wantErr:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.setupCache()
+			tt.setupRepo()
+			gotTasks, gotCount, err := service.ListByPage(tt.page, tt.limit, tt.order)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.wantTasks, gotTasks)
+				assert.Equal(t, tt.wantCount, gotCount)
 			}
 		})
 	}

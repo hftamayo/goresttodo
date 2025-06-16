@@ -20,9 +20,9 @@ type MockTaskService struct {
 	mock.Mock
 }
 
-func (m *MockTaskService) List(cursor string, limit int) ([]*models.Task, string, int64, error) {
-	args := m.Called(cursor, limit)
-	return args.Get(0).([]*models.Task), args.String(1), args.Get(2).(int64), args.Error(3)
+func (m *MockTaskService) List(cursor string, limit int, order string) ([]*models.Task, string, string, int64, error) {
+	args := m.Called(cursor, limit, order)
+	return args.Get(0).([]*models.Task), args.String(1), args.String(2), args.Get(3).(int64), args.Error(4)
 }
 
 func (m *MockTaskService) ListById(id int) (*models.Task, error) {
@@ -50,6 +50,11 @@ func (m *MockTaskService) MarkAsDone(id int) (*models.Task, error) {
 	return args.Get(0).(*models.Task), args.Error(1)
 }
 
+func (m *MockTaskService) ListByPage(page int, limit int, order string) ([]*models.Task, int64, error) {
+	args := m.Called(page, limit, order)
+	return args.Get(0).([]*models.Task), args.Get(1).(int64), args.Error(2)
+}
+
 // MockErrorLogService is a mock implementation of errorlog.ErrorLogService
 type MockErrorLogService struct {
 	mock.Mock
@@ -64,6 +69,7 @@ func setupTestRouter(handler *Handler) *gin.Engine {
 	router := gin.New()
 	
 	router.GET("/tasks", handler.List)
+	router.GET("/tasks/page", handler.ListByPage)
 	router.GET("/tasks/:id", handler.ListById)
 	router.POST("/tasks", handler.Create)
 	router.PUT("/tasks/:id", handler.Update)
@@ -91,8 +97,9 @@ func TestHandler_List(t *testing.T) {
 			name:  "successful list",
 			query: "?limit=10",
 			setupMock: func() {
-				mockService.On("List", "", 10).Return(
+				mockService.On("List", "", 10, "").Return(
 					[]*models.Task{},
+					"",
 					"",
 					int64(0),
 					nil,
@@ -113,8 +120,9 @@ func TestHandler_List(t *testing.T) {
 			name:  "service error",
 			query: "?limit=10",
 			setupMock: func() {
-				mockService.On("List", "", 10).Return(
+				mockService.On("List", "", 10, "").Return(
 					nil,
+					"",
 					"",
 					int64(0),
 					assert.AnError,
@@ -484,6 +492,107 @@ func TestHandler_Delete(t *testing.T) {
 			
 			w := httptest.NewRecorder()
 			req, _ := http.NewRequest("DELETE", "/tasks/"+tt.id, nil)
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, tt.expectedCode, w.Code)
+			
+			if tt.expectedError != "" {
+				var response ErrorResponse
+				err := json.Unmarshal(w.Body.Bytes(), &response)
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expectedError, response.Error)
+			}
+		})
+	}
+}
+
+func TestHandler_ListByPage(t *testing.T) {
+	mockService := new(MockTaskService)
+	mockErrorLog := new(MockErrorLogService)
+	mockCache := &utils.Cache{}
+	handler := NewHandler(mockService, mockErrorLog, mockCache)
+	router := setupTestRouter(handler)
+
+	tests := []struct {
+		name           string
+		query         string
+		setupMock     func()
+		expectedCode  int
+		expectedError string
+	}{
+		{
+			name:  "successful list with default values",
+			query: "",
+			setupMock: func() {
+				mockService.On("ListByPage", 1, utils.DefaultLimit, utils.DefaultOrder).Return(
+					[]*models.Task{},
+					int64(0),
+					nil,
+				)
+			},
+			expectedCode: http.StatusOK,
+		},
+		{
+			name:  "successful list with custom values",
+			query: "?page=2&limit=5&order=asc",
+			setupMock: func() {
+				mockService.On("ListByPage", 2, 5, "asc").Return(
+					[]*models.Task{},
+					int64(0),
+					nil,
+				)
+			},
+			expectedCode: http.StatusOK,
+		},
+		{
+			name:  "invalid page",
+			query: "?page=0",
+			setupMock: func() {
+				mockErrorLog.On("LogError", "Task_list_validation", mock.Anything).Return()
+			},
+			expectedCode:  http.StatusBadRequest,
+			expectedError: ErrInvalidPaginationParams,
+		},
+		{
+			name:  "invalid limit",
+			query: "?limit=0",
+			setupMock: func() {
+				mockErrorLog.On("LogError", "Task_list_validation", mock.Anything).Return()
+			},
+			expectedCode:  http.StatusBadRequest,
+			expectedError: ErrInvalidPaginationParams,
+		},
+		{
+			name:  "invalid order",
+			query: "?order=invalid",
+			setupMock: func() {
+				mockErrorLog.On("LogError", "Task_list_validation", mock.Anything).Return()
+			},
+			expectedCode:  http.StatusBadRequest,
+			expectedError: ErrInvalidPaginationParams,
+		},
+		{
+			name:  "service error",
+			query: "?page=1&limit=10",
+			setupMock: func() {
+				mockService.On("ListByPage", 1, 10, utils.DefaultOrder).Return(
+					nil,
+					int64(0),
+					assert.AnError,
+				)
+				mockErrorLog.On("LogError", "Task_list", mock.Anything).Return()
+			},
+			expectedCode:  http.StatusInternalServerError,
+			expectedError: "Failed to fetch tasks",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.setupMock()
+			
+			w := httptest.NewRecorder()
+			req, _ := http.NewRequest("GET", "/tasks/page"+tt.query, nil)
 			router.ServeHTTP(w, req)
 
 			assert.Equal(t, tt.expectedCode, w.Code)
