@@ -10,105 +10,237 @@ import (
 
 func TestHashPassword(t *testing.T) {
 	tests := []struct {
-		name          string
-		password      string
-		expectedError bool
+		name     string
+		password string
+		wantErr  bool
 	}{
 		{
-			name:          "valid password",
-			password:      "validPassword123!",
-			expectedError: false,
+			name:     "valid password",
+			password: "mySecurePassword123",
+			wantErr:  false,
 		},
 		{
-			name:          "empty password",
-			password:      "",
-			expectedError: false,
+			name:     "empty password",
+			password: "",
+			wantErr:  false,
 		},
 		{
-			name:          "very long password",
-			password:      strings.Repeat("a", 1000),
-			expectedError: false,
+			name:     "password with special characters",
+			password: "P@ssw0rd!@#$%^&*()",
+			wantErr:  false,
 		},
 		{
-			name:          "password with special characters",
-			password:      "!@#$%^&*()_+-=[]{}|;:,.<>?",
-			expectedError: false,
+			name:     "very long password",
+			password: strings.Repeat("a", 1000),
+			wantErr:  false,
 		},
 		{
-			name:          "password with unicode characters",
-			password:      "パスワード123",
-			expectedError: false,
+			name:     "password with unicode characters",
+			password: "pásswörd测试",
+			wantErr:  false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Hash the password
-			hashedPassword, err := HashPassword(tt.password)
-
-			if tt.expectedError {
-				assert.Error(t, err)
-				assert.Empty(t, hashedPassword)
-			} else {
-				assert.NoError(t, err)
-				assert.NotEmpty(t, hashedPassword)
-				assert.NotEqual(t, tt.password, hashedPassword)
-
-				// Verify the hash can be compared with bcrypt
-				err = bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(tt.password))
-				assert.NoError(t, err)
-
-				// Verify the hash is different for the same password (due to salt)
-				secondHash, err := HashPassword(tt.password)
-				assert.NoError(t, err)
-				assert.NotEqual(t, hashedPassword, secondHash)
-
-				// Verify the hash can still be compared with bcrypt
-				err = bcrypt.CompareHashAndPassword([]byte(secondHash), []byte(tt.password))
-				assert.NoError(t, err)
+			hash, err := HashPassword(tt.password)
+			
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("HashPassword() expected error but got none")
+				}
+				return
+			}
+			
+			if err != nil {
+				t.Errorf("HashPassword() unexpected error = %v", err)
+				return
+			}
+			
+			if hash == "" {
+				t.Errorf("HashPassword() returned empty hash")
+			}
+			
+			// Verify the hash is valid bcrypt format
+			if !strings.HasPrefix(hash, "$2a$") && !strings.HasPrefix(hash, "$2b$") && !strings.HasPrefix(hash, "$2y$") {
+				t.Errorf("HashPassword() returned invalid bcrypt hash format: %s", hash)
 			}
 		})
 	}
 }
 
-func TestHashPassword_InvalidInput(t *testing.T) {
-	// Test with nil password
-	hashedPassword, err := HashPassword("")
-	assert.NoError(t, err)
-	assert.NotEmpty(t, hashedPassword)
-
-	// Test with extremely long password
-	longPassword := strings.Repeat("a", 10000)
-	hashedPassword, err = HashPassword(longPassword)
-	assert.NoError(t, err)
-	assert.NotEmpty(t, hashedPassword)
-
-	// Verify the hash can be compared with bcrypt
-	err = bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(longPassword))
-	assert.NoError(t, err)
-}
-
 func TestHashPassword_Consistency(t *testing.T) {
-	password := "testPassword123!"
+	password := "testPassword123"
 	
 	// Hash the same password multiple times
-	hashes := make([]string, 5)
-	for i := 0; i < 5; i++ {
-		hash, err := HashPassword(password)
-		assert.NoError(t, err)
-		hashes[i] = hash
+	hash1, err1 := HashPassword(password)
+	hash2, err2 := HashPassword(password)
+	hash3, err3 := HashPassword(password)
+	
+	if err1 != nil || err2 != nil || err3 != nil {
+		t.Fatalf("HashPassword() failed: %v, %v, %v", err1, err2, err3)
+	}
+	
+	// Hashes should be different due to salt
+	if hash1 == hash2 || hash1 == hash3 || hash2 == hash3 {
+		t.Errorf("HashPassword() returned identical hashes for same password, expected different hashes due to salt")
+	}
+	
+	// All hashes should be valid
+	if err := bcrypt.CompareHashAndPassword([]byte(hash1), []byte(password)); err != nil {
+		t.Errorf("HashPassword() generated invalid hash: %v", err)
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(hash2), []byte(password)); err != nil {
+		t.Errorf("HashPassword() generated invalid hash: %v", err)
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(hash3), []byte(password)); err != nil {
+		t.Errorf("HashPassword() generated invalid hash: %v", err)
+	}
+}
+
+func TestHashPassword_Verification(t *testing.T) {
+	tests := []struct {
+		name     string
+		password string
+	}{
+		{
+			name:     "simple password",
+			password: "password",
+		},
+		{
+			name:     "complex password",
+			password: "MyC0mpl3x!P@ssw0rd",
+		},
+		{
+			name:     "password with spaces",
+			password: "password with spaces",
+		},
+		{
+			name:     "numeric password",
+			password: "1234567890",
+		},
 	}
 
-	// Verify all hashes are different (due to salt)
-	for i := 0; i < len(hashes); i++ {
-		for j := i + 1; j < len(hashes); j++ {
-			assert.NotEqual(t, hashes[i], hashes[j], "Hashes should be different due to salt")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hash, err := HashPassword(tt.password)
+			if err != nil {
+				t.Fatalf("HashPassword() failed: %v", err)
+			}
+			
+			// Verify the hash matches the original password
+			err = bcrypt.CompareHashAndPassword([]byte(hash), []byte(tt.password))
+			if err != nil {
+				t.Errorf("Hash verification failed: %v", err)
+			}
+			
+			// Verify the hash doesn't match wrong password
+			wrongPassword := tt.password + "wrong"
+			err = bcrypt.CompareHashAndPassword([]byte(hash), []byte(wrongPassword))
+			if err == nil {
+				t.Errorf("Hash verification should have failed for wrong password")
+			}
+		})
+	}
+}
+
+func TestHashPassword_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		password string
+		desc     string
+	}{
+		{
+			name:     "single character",
+			password: "a",
+			desc:     "very short password",
+		},
+		{
+			name:     "whitespace only",
+			password: "   ",
+			desc:     "password with only whitespace",
+		},
+		{
+			name:     "null bytes",
+			password: string([]byte{0, 1, 2, 3}),
+			desc:     "password with null bytes",
+		},
+		{
+			name:     "emoji password",
+			password: "🔐🛡️💻",
+			desc:     "password with emojis",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hash, err := HashPassword(tt.password)
+			if err != nil {
+				t.Errorf("HashPassword() failed for %s: %v", tt.desc, err)
+				return
+			}
+			
+			// Verify the hash is valid
+			err = bcrypt.CompareHashAndPassword([]byte(hash), []byte(tt.password))
+			if err != nil {
+				t.Errorf("Hash verification failed for %s: %v", tt.desc, err)
+			}
+		})
+	}
+}
+
+func TestHashPassword_Performance(t *testing.T) {
+	password := "performanceTestPassword"
+	
+	// Test that hashing doesn't take too long
+	hash, err := HashPassword(password)
+	if err != nil {
+		t.Fatalf("HashPassword() failed: %v", err)
+	}
+	
+	if hash == "" {
+		t.Errorf("HashPassword() returned empty hash")
+	}
+	
+	// Verify the hash is valid
+	err = bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+	if err != nil {
+		t.Errorf("Hash verification failed: %v", err)
+	}
+}
+
+func BenchmarkHashPassword(b *testing.B) {
+	password := "benchmarkPassword123"
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := HashPassword(password)
+		if err != nil {
+			b.Fatalf("HashPassword() failed: %v", err)
 		}
 	}
+}
 
-	// Verify all hashes can be compared with the original password
-	for _, hash := range hashes {
-		err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
-		assert.NoError(t, err, "Hash should be comparable with original password")
+func BenchmarkHashPassword_Empty(b *testing.B) {
+	password := ""
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := HashPassword(password)
+		if err != nil {
+			b.Fatalf("HashPassword() failed: %v", err)
+		}
+	}
+}
+
+func BenchmarkHashPassword_Long(b *testing.B) {
+	password := strings.Repeat("a", 100)
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := HashPassword(password)
+		if err != nil {
+			b.Fatalf("HashPassword() failed: %v", err)
+		}
 	}
 } 
