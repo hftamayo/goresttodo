@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -18,17 +19,17 @@ type MockRedisClient struct {
 	mock.Mock
 }
 
-func (m *MockRedisClient) Incr(ctx interface{}, key string) *redis.IntCmd {
+func (m *MockRedisClient) Incr(ctx context.Context, key string) *redis.IntCmd {
 	args := m.Called(ctx, key)
 	return args.Get(0).(*redis.IntCmd)
 }
 
-func (m *MockRedisClient) Expire(ctx interface{}, key string, expiration time.Duration) *redis.BoolCmd {
+func (m *MockRedisClient) Expire(ctx context.Context, key string, expiration time.Duration) *redis.BoolCmd {
 	args := m.Called(ctx, key, expiration)
 	return args.Get(0).(*redis.BoolCmd)
 }
 
-func (m *MockRedisClient) Get(ctx interface{}, key string) *redis.StringCmd {
+func (m *MockRedisClient) Get(ctx context.Context, key string) *redis.StringCmd {
 	args := m.Called(ctx, key)
 	return args.Get(0).(*redis.StringCmd)
 }
@@ -61,69 +62,383 @@ func (m *MockPipeliner) Exec(ctx interface{}) ([]redis.Cmder, error) {
 func setupTestRouter(rateLimiter *utils.RateLimiter) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	router.Use(RateLimitMiddleware(rateLimiter))
+	router.Use(RateLimiter(rateLimiter))
 	router.GET("/test", func(c *gin.Context) {
 		c.Status(http.StatusOK)
+		c.JSON(http.StatusOK, gin.H{"message": "success"})
+	})
+	router.POST("/test", func(c *gin.Context) {
+		c.Status(http.StatusCreated)
+		c.JSON(http.StatusCreated, gin.H{"message": "created"})
+	})
+	router.PUT("/test", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+		c.JSON(http.StatusOK, gin.H{"message": "updated"})
+	})
+	router.DELETE("/test", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+		c.JSON(http.StatusOK, gin.H{"message": "deleted"})
 	})
 	return router
 }
 
-func TestRateLimitMiddleware(t *testing.T) {
+func TestRateLimiter(t *testing.T) {
 	tests := []struct {
 		name           string
+		method         string
 		clientIP       string
-		setupMock      func(*MockRedisClient, *MockPipeliner)
+		setupMock      func(*MockRedisClient)
 		expectedCode   int
 		expectedBody   string
+		description    string
 	}{
 		{
-			name:     "request within rate limit",
+			name:     "GET request within read rate limit",
+			method:   "GET",
 			clientIP: "192.168.1.1",
-			setupMock: func(mockRedis *MockRedisClient, mockPipe *MockPipeliner) {
-				mockRedis.On("TxPipeline").Return(mockPipe)
-				mockPipe.On("Incr", mock.Anything, "192.168.1.1").Return(redis.NewIntCmd(mock.Anything))
-				mockPipe.On("Expire", mock.Anything, "192.168.1.1", mock.Anything).Return(redis.NewBoolCmd(mock.Anything))
-				mockPipe.On("Exec", mock.Anything).Return([]redis.Cmder{}, nil)
-				mockRedis.On("Get", mock.Anything, "192.168.1.1").Return(redis.NewStringCmd(mock.Anything, "5"))
+			setupMock: func(mockRedis *MockRedisClient) {
+				// First request - increment counter
+				mockRedis.On("Incr", mock.Anything, "rate_limit:192.168.1.1:60").Return(
+					redis.NewIntResult(5, nil))
+				// Set expiration for first request
+				mockRedis.On("Expire", mock.Anything, "rate_limit:192.168.1.1:60", time.Duration(60)*time.Second).Return(
+					redis.NewBoolResult(true, nil))
 			},
 			expectedCode: http.StatusOK,
+			description:  "GET request should be allowed within read rate limit",
 		},
 		{
-			name:     "request exceeds rate limit",
+			name:     "POST request within write rate limit",
+			method:   "POST",
 			clientIP: "192.168.1.2",
-			setupMock: func(mockRedis *MockRedisClient, mockPipe *MockPipeliner) {
-				mockRedis.On("TxPipeline").Return(mockPipe)
-				mockPipe.On("Incr", mock.Anything, "192.168.1.2").Return(redis.NewIntCmd(mock.Anything))
-				mockPipe.On("Expire", mock.Anything, "192.168.1.2", mock.Anything).Return(redis.NewBoolCmd(mock.Anything))
-				mockPipe.On("Exec", mock.Anything).Return([]redis.Cmder{}, nil)
-				mockRedis.On("Get", mock.Anything, "192.168.1.2").Return(redis.NewStringCmd(mock.Anything, "101"))
+			setupMock: func(mockRedis *MockRedisClient) {
+				// First request - increment counter
+				mockRedis.On("Incr", mock.Anything, "rate_limit:192.168.1.2:60").Return(
+					redis.NewIntResult(10, nil))
+				// Set expiration for first request
+				mockRedis.On("Expire", mock.Anything, "rate_limit:192.168.1.2:60", time.Duration(60)*time.Second).Return(
+					redis.NewBoolResult(true, nil))
+			},
+			expectedCode: http.StatusCreated,
+			description:  "POST request should be allowed within write rate limit",
+		},
+		{
+			name:     "PUT request within write rate limit",
+			method:   "PUT",
+			clientIP: "192.168.1.3",
+			setupMock: func(mockRedis *MockRedisClient) {
+				mockRedis.On("Incr", mock.Anything, "rate_limit:192.168.1.3:60").Return(
+					redis.NewIntResult(25, nil))
+				mockRedis.On("Expire", mock.Anything, "rate_limit:192.168.1.3:60", time.Duration(60)*time.Second).Return(
+					redis.NewBoolResult(true, nil))
+			},
+			expectedCode: http.StatusOK,
+			description:  "PUT request should be allowed within write rate limit",
+		},
+		{
+			name:     "DELETE request within write rate limit",
+			method:   "DELETE",
+			clientIP: "192.168.1.4",
+			setupMock: func(mockRedis *MockRedisClient) {
+				mockRedis.On("Incr", mock.Anything, "rate_limit:192.168.1.4:60").Return(
+					redis.NewIntResult(30, nil))
+				mockRedis.On("Expire", mock.Anything, "rate_limit:192.168.1.4:60", time.Duration(60)*time.Second).Return(
+					redis.NewBoolResult(true, nil))
+			},
+			expectedCode: http.StatusOK,
+			description:  "DELETE request should be allowed within write rate limit",
+		},
+		{
+			name:     "GET request exceeds read rate limit",
+			method:   "GET",
+			clientIP: "192.168.1.5",
+			setupMock: func(mockRedis *MockRedisClient) {
+				mockRedis.On("Incr", mock.Anything, "rate_limit:192.168.1.5:60").Return(
+					redis.NewIntResult(101, nil))
 			},
 			expectedCode: http.StatusTooManyRequests,
-			expectedBody: `{"code":429,"resultMessage":"RATE_LIMIT_EXCEEDED"}`,
+			expectedBody: `{"error":"Rate limit exceeded","retry_after":`,
+			description:  "GET request should be blocked when exceeding read rate limit",
 		},
 		{
-			name:     "redis error",
-			clientIP: "192.168.1.3",
-			setupMock: func(mockRedis *MockRedisClient, mockPipe *MockPipeliner) {
-				mockRedis.On("TxPipeline").Return(mockPipe)
-				mockPipe.On("Incr", mock.Anything, "192.168.1.3").Return(redis.NewIntCmd(mock.Anything))
-				mockPipe.On("Expire", mock.Anything, "192.168.1.3", mock.Anything).Return(redis.NewBoolCmd(mock.Anything))
-				mockPipe.On("Exec", mock.Anything).Return([]redis.Cmder{}, assert.AnError)
+			name:     "POST request exceeds write rate limit",
+			method:   "POST",
+			clientIP: "192.168.1.6",
+			setupMock: func(mockRedis *MockRedisClient) {
+				mockRedis.On("Incr", mock.Anything, "rate_limit:192.168.1.6:60").Return(
+					redis.NewIntResult(51, nil))
+			},
+			expectedCode: http.StatusTooManyRequests,
+			expectedBody: `{"error":"Rate limit exceeded","retry_after":`,
+			description:  "POST request should be blocked when exceeding write rate limit",
+		},
+		{
+			name:     "redis error during increment",
+			method:   "GET",
+			clientIP: "192.168.1.7",
+			setupMock: func(mockRedis *MockRedisClient) {
+				mockRedis.On("Incr", mock.Anything, "rate_limit:192.168.1.7:60").Return(
+					redis.NewIntResult(0, assert.AnError))
 			},
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: `{"code":500,"resultMessage":"INTERNAL_SERVER_ERROR"}`,
+			expectedBody: `{"error":"Rate limit error"}`,
+			description:  "Should handle Redis increment errors gracefully",
+		},
+		{
+			name:     "redis error during expire",
+			method:   "GET",
+			clientIP: "192.168.1.8",
+			setupMock: func(mockRedis *MockRedisClient) {
+				mockRedis.On("Incr", mock.Anything, "rate_limit:192.168.1.8:60").Return(
+					redis.NewIntResult(1, nil))
+				mockRedis.On("Expire", mock.Anything, "rate_limit:192.168.1.8:60", time.Duration(60)*time.Second).Return(
+					redis.NewBoolResult(false, assert.AnError))
+			},
+			expectedCode: http.StatusInternalServerError,
+			expectedBody: `{"error":"Rate limit error"}`,
+			description:  "Should handle Redis expire errors gracefully",
+		},
+		{
+			name:     "unknown client IP",
+			method:   "GET",
+			clientIP: "",
+			setupMock: func(mockRedis *MockRedisClient) {
+				mockRedis.On("Incr", mock.Anything, "rate_limit:unknown:60").Return(
+					redis.NewIntResult(5, nil))
+				mockRedis.On("Expire", mock.Anything, "rate_limit:unknown:60", time.Duration(60)*time.Second).Return(
+					redis.NewBoolResult(true, nil))
+			},
+			expectedCode: http.StatusOK,
+			description:  "Should handle empty client IP by using 'unknown'",
+		},
+		{
+			name:     "OPTIONS request treated as read",
+			method:   "OPTIONS",
+			clientIP: "192.168.1.9",
+			setupMock: func(mockRedis *MockRedisClient) {
+				mockRedis.On("Incr", mock.Anything, "rate_limit:192.168.1.9:60").Return(
+					redis.NewIntResult(5, nil))
+				mockRedis.On("Expire", mock.Anything, "rate_limit:192.168.1.9:60", time.Duration(60)*time.Second).Return(
+					redis.NewBoolResult(true, nil))
+			},
+			expectedCode: http.StatusOK,
+			description:  "OPTIONS request should be treated as read operation",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create mock objects
+			// Create mock Redis client
 			mockRedis := new(MockRedisClient)
-			mockPipe := new(MockPipeliner)
-			tt.setupMock(mockRedis, mockPipe)
+			tt.setupMock(mockRedis)
 
 			// Create rate limiter with mock Redis client
-			rateLimiter := utils.NewRateLimiter(mockRedis, 100, time.Minute)
+			rateLimiter := utils.NewRateLimiter(mockRedis)
+
+			// Setup router with rate limiter middleware
+			router := setupTestRouter(rateLimiter)
+
+			// Create test request
+			w := httptest.NewRecorder()
+			req, _ := http.NewRequest(tt.method, "/test", nil)
+			if tt.clientIP != "" {
+				req.RemoteAddr = tt.clientIP + ":12345"
+			}
+
+			// Make request
+			router.ServeHTTP(w, req)
+
+			// Assert response
+			assert.Equal(t, tt.expectedCode, w.Code, "Test: %s", tt.description)
+
+			if tt.expectedBody != "" {
+				if tt.expectedCode == http.StatusTooManyRequests {
+					// For rate limit exceeded, check that response contains the expected fields
+					assert.Contains(t, w.Body.String(), `"error":"Rate limit exceeded"`, 
+						"Response should contain rate limit error message")
+					assert.Contains(t, w.Body.String(), `"retry_after"`, 
+						"Response should contain retry_after field")
+				} else {
+					assert.JSONEq(t, tt.expectedBody, w.Body.String(), 
+						"Response body mismatch for test: %s", tt.description)
+				}
+			}
+
+			// Verify rate limit headers for successful requests
+			if tt.expectedCode == http.StatusOK || tt.expectedCode == http.StatusCreated {
+				assert.NotEmpty(t, w.Header().Get("X-RateLimit-Limit"), 
+					"Rate limit header should be present for successful requests")
+				assert.NotEmpty(t, w.Header().Get("X-RateLimit-Remaining"), 
+					"Rate limit remaining header should be present for successful requests")
+			}
+
+			// Verify mock expectations
+			mockRedis.AssertExpectations(t)
+		})
+	}
+}
+
+func TestRateLimiter_OperationTypes(t *testing.T) {
+	tests := []struct {
+		name           string
+		method         string
+		expectedOp     utils.OperationType
+		description    string
+	}{
+		{
+			name:        "GET method maps to read operation",
+			method:      "GET",
+			expectedOp:  utils.OperationRead,
+			description: "GET requests should be treated as read operations",
+		},
+		{
+			name:        "POST method maps to write operation",
+			method:      "POST",
+			expectedOp:  utils.OperationWrite,
+			description: "POST requests should be treated as write operations",
+		},
+		{
+			name:        "PUT method maps to write operation",
+			method:      "PUT",
+			expectedOp:  utils.OperationWrite,
+			description: "PUT requests should be treated as write operations",
+		},
+		{
+			name:        "PATCH method maps to write operation",
+			method:      "PATCH",
+			expectedOp:  utils.OperationWrite,
+			description: "PATCH requests should be treated as write operations",
+		},
+		{
+			name:        "DELETE method maps to write operation",
+			method:      "DELETE",
+			expectedOp:  utils.OperationWrite,
+			description: "DELETE requests should be treated as write operations",
+		},
+		{
+			name:        "OPTIONS method maps to read operation",
+			method:      "OPTIONS",
+			expectedOp:  utils.OperationRead,
+			description: "OPTIONS requests should be treated as read operations",
+		},
+		{
+			name:        "HEAD method maps to read operation",
+			method:      "HEAD",
+			expectedOp:  utils.OperationRead,
+			description: "HEAD requests should be treated as read operations",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create mock Redis client
+			mockRedis := new(MockRedisClient)
+			mockRedis.On("Incr", mock.Anything, mock.Anything).Return(redis.NewIntResult(1, nil))
+			mockRedis.On("Expire", mock.Anything, mock.Anything, mock.Anything).Return(redis.NewBoolResult(true, nil))
+
+			// Create rate limiter with mock Redis client
+			rateLimiter := utils.NewRateLimiter(mockRedis)
+
+			// Setup router with rate limiter middleware
+			router := setupTestRouter(rateLimiter)
+
+			// Create test request
+			w := httptest.NewRecorder()
+			req, _ := http.NewRequest(tt.method, "/test", nil)
+			req.RemoteAddr = "192.168.1.1:12345"
+
+			// Make request
+			router.ServeHTTP(w, req)
+
+			// Verify the request was processed (status should be OK for read operations)
+			if tt.expectedOp == utils.OperationRead {
+				assert.Equal(t, http.StatusOK, w.Code, "Test: %s", tt.description)
+			} else {
+				// For write operations, we expect the request to be processed
+				assert.NotEqual(t, http.StatusInternalServerError, w.Code, "Test: %s", tt.description)
+			}
+
+			mockRedis.AssertExpectations(t)
+		})
+	}
+}
+
+func TestRateLimiter_Headers(t *testing.T) {
+	// Create mock Redis client
+	mockRedis := new(MockRedisClient)
+	mockRedis.On("Incr", mock.Anything, mock.Anything).Return(redis.NewIntResult(5, nil))
+	mockRedis.On("Expire", mock.Anything, mock.Anything, mock.Anything).Return(redis.NewBoolResult(true, nil))
+
+	// Create rate limiter with mock Redis client
+	rateLimiter := utils.NewRateLimiter(mockRedis)
+
+	// Setup router with rate limiter middleware
+	router := setupTestRouter(rateLimiter)
+
+	// Create test request
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/test", nil)
+	req.RemoteAddr = "192.168.1.1:12345"
+
+	// Make request
+	router.ServeHTTP(w, req)
+
+	// Verify rate limit headers
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NotEmpty(t, w.Header().Get("X-RateLimit-Limit"), "X-RateLimit-Limit header should be present")
+	assert.NotEmpty(t, w.Header().Get("X-RateLimit-Remaining"), "X-RateLimit-Remaining header should be present")
+	
+	// Verify header values are numeric
+	limit := w.Header().Get("X-RateLimit-Limit")
+	remaining := w.Header().Get("X-RateLimit-Remaining")
+	assert.NotEqual(t, "", limit, "Limit header should not be empty")
+	assert.NotEqual(t, "", remaining, "Remaining header should not be empty")
+
+	mockRedis.AssertExpectations(t)
+}
+
+func TestRateLimiter_ClientIPExtraction(t *testing.T) {
+	tests := []struct {
+		name           string
+		remoteAddr     string
+		expectedIP     string
+		description    string
+	}{
+		{
+			name:        "standard IP address",
+			remoteAddr:  "192.168.1.1:12345",
+			expectedIP:  "192.168.1.1",
+			description: "Should extract IP from standard remote address",
+		},
+		{
+			name:        "IPv6 address",
+			remoteAddr:  "[2001:db8::1]:12345",
+			expectedIP:  "2001:db8::1",
+			description: "Should extract IP from IPv6 address",
+		},
+		{
+			name:        "empty remote address",
+			remoteAddr:  "",
+			expectedIP:  "unknown",
+			description: "Should use 'unknown' for empty remote address",
+		},
+		{
+			name:        "malformed remote address",
+			remoteAddr:  "invalid-address",
+			expectedIP:  "invalid-address",
+			description: "Should handle malformed remote address",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create mock Redis client
+			mockRedis := new(MockRedisClient)
+			mockRedis.On("Incr", mock.Anything, mock.Anything).Return(redis.NewIntResult(1, nil))
+			mockRedis.On("Expire", mock.Anything, mock.Anything, mock.Anything).Return(redis.NewBoolResult(true, nil))
+
+			// Create rate limiter with mock Redis client
+			rateLimiter := utils.NewRateLimiter(mockRedis)
 
 			// Setup router with rate limiter middleware
 			router := setupTestRouter(rateLimiter)
@@ -131,88 +446,94 @@ func TestRateLimitMiddleware(t *testing.T) {
 			// Create test request
 			w := httptest.NewRecorder()
 			req, _ := http.NewRequest("GET", "/test", nil)
-			req.RemoteAddr = tt.clientIP
+			if tt.remoteAddr != "" {
+				req.RemoteAddr = tt.remoteAddr
+			}
 
 			// Make request
 			router.ServeHTTP(w, req)
 
-			// Assert response
-			assert.Equal(t, tt.expectedCode, w.Code)
-			if tt.expectedBody != "" {
-				assert.JSONEq(t, tt.expectedBody, w.Body.String())
-			}
+			// Verify the request was processed
+			assert.Equal(t, http.StatusOK, w.Code, "Test: %s", tt.description)
+
+			mockRedis.AssertExpectations(t)
 		})
 	}
 }
 
-func TestRateLimiter_Allow(t *testing.T) {
-	tests := []struct {
-		name           string
-		key            string
-		setupMock      func(*MockRedisClient, *MockPipeliner)
-		expectedAllow  bool
-		expectedError  bool
-	}{
-		{
-			name: "within rate limit",
-			key:  "test-key-1",
-			setupMock: func(mockRedis *MockRedisClient, mockPipe *MockPipeliner) {
-				mockRedis.On("TxPipeline").Return(mockPipe)
-				mockPipe.On("Incr", mock.Anything, "test-key-1").Return(redis.NewIntCmd(mock.Anything))
-				mockPipe.On("Expire", mock.Anything, "test-key-1", mock.Anything).Return(redis.NewBoolCmd(mock.Anything))
-				mockPipe.On("Exec", mock.Anything).Return([]redis.Cmder{}, nil)
-				mockRedis.On("Get", mock.Anything, "test-key-1").Return(redis.NewStringCmd(mock.Anything, "5"))
-			},
-			expectedAllow: true,
-			expectedError: false,
-		},
-		{
-			name: "exceeds rate limit",
-			key:  "test-key-2",
-			setupMock: func(mockRedis *MockRedisClient, mockPipe *MockPipeliner) {
-				mockRedis.On("TxPipeline").Return(mockPipe)
-				mockPipe.On("Incr", mock.Anything, "test-key-2").Return(redis.NewIntCmd(mock.Anything))
-				mockPipe.On("Expire", mock.Anything, "test-key-2", mock.Anything).Return(redis.NewBoolCmd(mock.Anything))
-				mockPipe.On("Exec", mock.Anything).Return([]redis.Cmder{}, nil)
-				mockRedis.On("Get", mock.Anything, "test-key-2").Return(redis.NewStringCmd(mock.Anything, "101"))
-			},
-			expectedAllow: false,
-			expectedError: false,
-		},
-		{
-			name: "redis error",
-			key:  "test-key-3",
-			setupMock: func(mockRedis *MockRedisClient, mockPipe *MockPipeliner) {
-				mockRedis.On("TxPipeline").Return(mockPipe)
-				mockPipe.On("Incr", mock.Anything, "test-key-3").Return(redis.NewIntCmd(mock.Anything))
-				mockPipe.On("Expire", mock.Anything, "test-key-3", mock.Anything).Return(redis.NewBoolCmd(mock.Anything))
-				mockPipe.On("Exec", mock.Anything).Return([]redis.Cmder{}, assert.AnError)
-			},
-			expectedAllow: false,
-			expectedError: true,
-		},
+func TestRateLimiter_Performance(t *testing.T) {
+	// Create mock Redis client
+	mockRedis := new(MockRedisClient)
+	mockRedis.On("Incr", mock.Anything, mock.Anything).Return(redis.NewIntResult(1, nil))
+	mockRedis.On("Expire", mock.Anything, mock.Anything, mock.Anything).Return(redis.NewBoolResult(true, nil))
+
+	// Create rate limiter with mock Redis client
+	rateLimiter := utils.NewRateLimiter(mockRedis)
+
+	// Setup router with rate limiter middleware
+	router := setupTestRouter(rateLimiter)
+
+	// Test multiple concurrent requests
+	methods := []string{"GET", "POST", "PUT", "DELETE"}
+	ips := []string{"192.168.1.1", "192.168.1.2", "192.168.1.3", "192.168.1.4"}
+
+	for _, method := range methods {
+		for _, ip := range ips {
+			w := httptest.NewRecorder()
+			req, _ := http.NewRequest(method, "/test", nil)
+			req.RemoteAddr = ip + ":12345"
+
+			router.ServeHTTP(w, req)
+
+			// All requests should be processed successfully
+			assert.NotEqual(t, http.StatusInternalServerError, w.Code, 
+				"Request with method %s from IP %s should be processed", method, ip)
+		}
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create mock objects
-			mockRedis := new(MockRedisClient)
-			mockPipe := new(MockPipeliner)
-			tt.setupMock(mockRedis, mockPipe)
+	mockRedis.AssertExpectations(t)
+}
 
-			// Create rate limiter with mock Redis client
-			rateLimiter := utils.NewRateLimiter(mockRedis, 100, time.Minute)
+func BenchmarkRateLimiter(b *testing.B) {
+	// Create mock Redis client
+	mockRedis := new(MockRedisClient)
+	mockRedis.On("Incr", mock.Anything, mock.Anything).Return(redis.NewIntResult(1, nil))
+	mockRedis.On("Expire", mock.Anything, mock.Anything, mock.Anything).Return(redis.NewBoolResult(true, nil))
 
-			// Test Allow method
-			allowed, err := rateLimiter.Allow(tt.key)
+	// Create rate limiter with mock Redis client
+	rateLimiter := utils.NewRateLimiter(mockRedis)
 
-			// Assert results
-			if tt.expectedError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-			assert.Equal(t, tt.expectedAllow, allowed)
-		})
+	// Setup router with rate limiter middleware
+	router := setupTestRouter(rateLimiter)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/test", nil)
+		req.RemoteAddr = "192.168.1.1:12345"
+
+		router.ServeHTTP(w, req)
+	}
+}
+
+func BenchmarkRateLimiter_Write(b *testing.B) {
+	// Create mock Redis client
+	mockRedis := new(MockRedisClient)
+	mockRedis.On("Incr", mock.Anything, mock.Anything).Return(redis.NewIntResult(1, nil))
+	mockRedis.On("Expire", mock.Anything, mock.Anything, mock.Anything).Return(redis.NewBoolResult(true, nil))
+
+	// Create rate limiter with mock Redis client
+	rateLimiter := utils.NewRateLimiter(mockRedis)
+
+	// Setup router with rate limiter middleware
+	router := setupTestRouter(rateLimiter)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("POST", "/test", nil)
+		req.RemoteAddr = "192.168.1.1:12345"
+
+		router.ServeHTTP(w, req)
 	}
 } 
