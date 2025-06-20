@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -16,7 +15,7 @@ func TestHashPassword(t *testing.T) {
 	}{
 		{
 			name:     "valid password",
-			password: "mySecurePassword123",
+			password: TestValidPassword,
 			wantErr:  false,
 		},
 		{
@@ -26,7 +25,7 @@ func TestHashPassword(t *testing.T) {
 		},
 		{
 			name:     "password with special characters",
-			password: "P@ssw0rd!@#$%^&*()",
+			password: TestStrongPassword,
 			wantErr:  false,
 		},
 		{
@@ -36,7 +35,7 @@ func TestHashPassword(t *testing.T) {
 		},
 		{
 			name:     "password with unicode characters",
-			password: "pásswörd测试",
+			password: TestUnicodePassword,
 			wantErr:  false,
 		},
 	}
@@ -70,7 +69,7 @@ func TestHashPassword(t *testing.T) {
 }
 
 func TestHashPassword_Consistency(t *testing.T) {
-	password := "testPassword123"
+	password := TestValidPassword
 	
 	// Hash the same password multiple times
 	hash1, err1 := HashPassword(password)
@@ -105,19 +104,19 @@ func TestHashPassword_Verification(t *testing.T) {
 	}{
 		{
 			name:     "simple password",
-			password: "password",
+			password: TestValidPassword,
 		},
 		{
 			name:     "complex password",
-			password: "MyC0mpl3x!P@ssw0rd",
+			password: TestStrongPassword,
 		},
 		{
 			name:     "password with spaces",
-			password: "password with spaces",
+			password: TestPasswordWithSpace,
 		},
 		{
 			name:     "numeric password",
-			password: "1234567890",
+			password: TestNumericPassword,
 		},
 	}
 
@@ -167,7 +166,7 @@ func TestHashPassword_EdgeCases(t *testing.T) {
 		},
 		{
 			name:     "emoji password",
-			password: "🔐🛡️💻",
+			password: TestEmojiPassword,
 			desc:     "password with emojis",
 		},
 	}
@@ -190,7 +189,7 @@ func TestHashPassword_EdgeCases(t *testing.T) {
 }
 
 func TestHashPassword_Performance(t *testing.T) {
-	password := "performanceTestPassword"
+	password := TestValidPassword
 	
 	// Test that hashing doesn't take too long
 	hash, err := HashPassword(password)
@@ -210,7 +209,7 @@ func TestHashPassword_Performance(t *testing.T) {
 }
 
 func BenchmarkHashPassword(b *testing.B) {
-	password := "benchmarkPassword123"
+	password := TestValidPassword
 	
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
