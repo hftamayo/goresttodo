@@ -114,7 +114,7 @@ func TestHandler_List(t *testing.T) {
 				mockErrorLog.On("LogError", "Task_list_validation", mock.Anything).Return()
 			},
 			expectedCode:  http.StatusBadRequest,
-			expectedError: ErrInvalidPaginationParams,
+			expectedError: ErrInvalidPaginationParams.Error(),
 		},
 		{
 			name:  "service error",
@@ -183,7 +183,7 @@ func TestHandler_ListById(t *testing.T) {
 				mockErrorLog.On("LogError", "Task_list_by_id", mock.Anything).Return()
 			},
 			expectedCode:  http.StatusBadRequest,
-			expectedError: ErrInvalidID,
+			expectedError: ErrInvalidID.Error(),
 		},
 		{
 			name: "task not found",
@@ -192,7 +192,7 @@ func TestHandler_ListById(t *testing.T) {
 				mockService.On("ListById", 999).Return(nil, nil)
 			},
 			expectedCode:  http.StatusNotFound,
-			expectedError: ErrTaskNotFound,
+			expectedError: ErrTaskNotFound.Error(),
 		},
 		{
 			name: "service error",
@@ -260,7 +260,7 @@ func TestHandler_Create(t *testing.T) {
 				mockErrorLog.On("LogError", "Task_create", mock.Anything).Return()
 			},
 			expectedCode:  http.StatusBadRequest,
-			expectedError: ErrInvalidRequest,
+			expectedError: ErrInvalidRequest.Error(),
 		},
 		{
 			name:    "service error",
@@ -333,7 +333,7 @@ func TestHandler_Update(t *testing.T) {
 				mockErrorLog.On("LogError", "Task_update_id", mock.Anything).Return()
 			},
 			expectedCode:  http.StatusBadRequest,
-			expectedError: ErrInvalidID,
+			expectedError: ErrInvalidID.Error(),
 		},
 		{
 			name:    "invalid request",
@@ -343,7 +343,7 @@ func TestHandler_Update(t *testing.T) {
 				mockErrorLog.On("LogError", "Task_update_binding", mock.Anything).Return()
 			},
 			expectedCode:  http.StatusBadRequest,
-			expectedError: ErrInvalidRequest,
+			expectedError: ErrInvalidRequest.Error(),
 		},
 		{
 			name:    "service error",
@@ -409,7 +409,7 @@ func TestHandler_Done(t *testing.T) {
 				mockErrorLog.On("LogError", "Task_done", mock.Anything).Return()
 			},
 			expectedCode:  http.StatusBadRequest,
-			expectedError: ErrInvalidID,
+			expectedError: ErrInvalidID.Error(),
 		},
 		{
 			name: "service error",
@@ -472,7 +472,7 @@ func TestHandler_Delete(t *testing.T) {
 				mockErrorLog.On("LogError", "Task_delete", mock.Anything).Return()
 			},
 			expectedCode:  http.StatusBadRequest,
-			expectedError: ErrInvalidID,
+			expectedError: ErrInvalidID.Error(),
 		},
 		{
 			name: "service error",
@@ -551,7 +551,7 @@ func TestHandler_ListByPage(t *testing.T) {
 				mockErrorLog.On("LogError", "Task_list_validation", mock.Anything).Return()
 			},
 			expectedCode:  http.StatusBadRequest,
-			expectedError: ErrInvalidPaginationParams,
+			expectedError: ErrInvalidPaginationParams.Error(),
 		},
 		{
 			name:  "invalid limit",
@@ -560,7 +560,7 @@ func TestHandler_ListByPage(t *testing.T) {
 				mockErrorLog.On("LogError", "Task_list_validation", mock.Anything).Return()
 			},
 			expectedCode:  http.StatusBadRequest,
-			expectedError: ErrInvalidPaginationParams,
+			expectedError: ErrInvalidPaginationParams.Error(),
 		},
 		{
 			name:  "invalid order",
@@ -569,7 +569,7 @@ func TestHandler_ListByPage(t *testing.T) {
 				mockErrorLog.On("LogError", "Task_list_validation", mock.Anything).Return()
 			},
 			expectedCode:  http.StatusBadRequest,
-			expectedError: ErrInvalidPaginationParams,
+			expectedError: ErrInvalidPaginationParams.Error(),
 		},
 		{
 			name:  "service error",
