@@ -419,7 +419,8 @@ func TestHandler_Create(t *testing.T) {
 				"title": "", // Invalid empty title
 			},
 			setupMocks: func(mockService *MockTaskServiceInterface, mockErrorLogRepo *MockErrorLogRepository) {
-				// No service calls expected
+				// Expect validation error to be logged
+				mockErrorLogRepo.On("LogError", "Task_create", mock.AnythingOfType("validator.ValidationErrors")).Return(nil)
 			},
 			expectedStatus: http.StatusBadRequest,
 			expectedBody: map[string]interface{}{
@@ -529,7 +530,8 @@ func TestHandler_Update(t *testing.T) {
 				"title": "Updated Task",
 			},
 			setupMocks: func(mockService *MockTaskServiceInterface, mockErrorLogRepo *MockErrorLogRepository) {
-				// No service calls expected
+				// Expect invalid ID error to be logged
+				mockErrorLogRepo.On("LogError", "Task_update_id", mock.AnythingOfType("*strconv.NumError")).Return(nil)
 			},
 			expectedStatus: http.StatusBadRequest,
 			expectedBody: map[string]interface{}{
@@ -632,7 +634,8 @@ func TestHandler_Done(t *testing.T) {
 			name:   "invalid id parameter",
 			taskID: "invalid",
 			setupMocks: func(mockService *MockTaskServiceInterface, mockErrorLogRepo *MockErrorLogRepository) {
-				// No service calls expected
+				// Expect invalid ID error to be logged
+				mockErrorLogRepo.On("LogError", "Task_done", mock.AnythingOfType("*strconv.NumError")).Return(nil)
 			},
 			expectedStatus: http.StatusBadRequest,
 			expectedBody: map[string]interface{}{
@@ -719,7 +722,8 @@ func TestHandler_Delete(t *testing.T) {
 			name:   "invalid id parameter",
 			taskID: "invalid",
 			setupMocks: func(mockService *MockTaskServiceInterface, mockErrorLogRepo *MockErrorLogRepository) {
-				// No service calls expected
+				// Expect invalid ID error to be logged
+				mockErrorLogRepo.On("LogError", "Task_delete", mock.AnythingOfType("*strconv.NumError")).Return(nil)
 			},
 			expectedStatus: http.StatusBadRequest,
 			expectedBody: map[string]interface{}{
