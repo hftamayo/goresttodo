@@ -24,6 +24,11 @@ type MockTaskServiceInterface struct {
 	mock.Mock
 }
 
+func (m *MockTaskServiceInterface) List(cursor string, limit int, order string) ([]*models.Task, string, string, int64, error) {
+	args := m.Called(cursor, limit, order)
+	return args.Get(0).([]*models.Task), args.String(1), args.String(2), args.Get(3).(int64), args.Error(4)
+}
+
 func (m *MockTaskServiceInterface) ListByPage(page, limit int, order string) ([]*models.Task, int64, error) {
 	args := m.Called(page, limit, order)
 	return args.Get(0).([]*models.Task), args.Get(1).(int64), args.Error(2)
@@ -102,14 +107,14 @@ func TestHandler_List(t *testing.T) {
 	tests := []struct {
 		name           string
 		query          string
-		setupMocks     func(*MockTaskServiceInterface, *MockCache)
+		setupMocks     func(*MockTaskServiceInterface)
 		expectedStatus int
 		expectedBody   map[string]interface{}
 	}{
 		{
 			name:  "successful list",
 			query: "?page=1&limit=10&order=desc",
-			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+			setupMocks: func(mockService *MockTaskServiceInterface) {
 				tasks := []*models.Task{
 					{
 						Model: gorm.Model{
@@ -134,7 +139,7 @@ func TestHandler_List(t *testing.T) {
 		{
 			name:  "invalid pagination parameters",
 			query: "?page=0&limit=0",
-			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+			setupMocks: func(mockService *MockTaskServiceInterface) {
 				// No service calls expected
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -146,7 +151,7 @@ func TestHandler_List(t *testing.T) {
 		{
 			name:  "service error",
 			query: "?page=1&limit=10",
-			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+			setupMocks: func(mockService *MockTaskServiceInterface) {
 				mockService.On("ListByPage", 1, 10, "desc").Return([]*models.Task{}, int64(0), errors.New("database error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -160,11 +165,11 @@ func TestHandler_List(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockService := &MockTaskServiceInterface{}
-			mockCache := &MockCache{}
+			mockCache := &utils.Cache{} // Use actual cache type
 			mockErrorLogRepo := &MockErrorLogRepository{}
 			mockErrorLogService := errorlog.NewErrorLogService(mockErrorLogRepo)
 
-			tt.setupMocks(mockService, mockCache)
+			tt.setupMocks(mockService)
 
 			handler := NewHandler(mockService, mockErrorLogService, mockCache)
 
@@ -185,7 +190,6 @@ func TestHandler_List(t *testing.T) {
 			assert.Equal(t, tt.expectedBody["resultMessage"], response["resultMessage"])
 
 			mockService.AssertExpectations(t)
-			mockCache.AssertExpectations(t)
 		})
 	}
 }
@@ -196,14 +200,14 @@ func TestHandler_ListById(t *testing.T) {
 	tests := []struct {
 		name           string
 		taskID         string
-		setupMocks     func(*MockTaskServiceInterface, *MockCache)
+		setupMocks     func(*MockTaskServiceInterface)
 		expectedStatus int
 		expectedBody   map[string]interface{}
 	}{
 		{
 			name:   "successful get by id",
 			taskID: "1",
-			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+			setupMocks: func(mockService *MockTaskServiceInterface) {
 				task := &models.Task{
 					Model: gorm.Model{
 						ID:        1,
@@ -226,7 +230,7 @@ func TestHandler_ListById(t *testing.T) {
 		{
 			name:   "invalid id parameter",
 			taskID: "invalid",
-			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+			setupMocks: func(mockService *MockTaskServiceInterface) {
 				// No service calls expected
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -238,7 +242,7 @@ func TestHandler_ListById(t *testing.T) {
 		{
 			name:   "task not found",
 			taskID: "999",
-			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+			setupMocks: func(mockService *MockTaskServiceInterface) {
 				mockService.On("ListById", 999).Return(nil, errors.New("task not found"))
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -252,11 +256,11 @@ func TestHandler_ListById(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockService := &MockTaskServiceInterface{}
-			mockCache := &MockCache{}
+			mockCache := &utils.Cache{} // Use actual cache type
 			mockErrorLogRepo := &MockErrorLogRepository{}
 			mockErrorLogService := errorlog.NewErrorLogService(mockErrorLogRepo)
 
-			tt.setupMocks(mockService, mockCache)
+			tt.setupMocks(mockService)
 
 			handler := NewHandler(mockService, mockErrorLogService, mockCache)
 
@@ -278,7 +282,6 @@ func TestHandler_ListById(t *testing.T) {
 			assert.Equal(t, tt.expectedBody["resultMessage"], response["resultMessage"])
 
 			mockService.AssertExpectations(t)
-			mockCache.AssertExpectations(t)
 		})
 	}
 }
@@ -289,7 +292,7 @@ func TestHandler_Create(t *testing.T) {
 	tests := []struct {
 		name           string
 		requestBody    map[string]interface{}
-		setupMocks     func(*MockTaskServiceInterface, *MockCache)
+		setupMocks     func(*MockTaskServiceInterface)
 		expectedStatus int
 		expectedBody   map[string]interface{}
 	}{
@@ -300,7 +303,7 @@ func TestHandler_Create(t *testing.T) {
 				"description": "New Description",
 				"owner":       1,
 			},
-			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+			setupMocks: func(mockService *MockTaskServiceInterface) {
 				createdTask := &models.Task{
 					Model: gorm.Model{
 						ID:        1,
@@ -325,7 +328,7 @@ func TestHandler_Create(t *testing.T) {
 			requestBody: map[string]interface{}{
 				"title": "", // Invalid empty title
 			},
-			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+			setupMocks: func(mockService *MockTaskServiceInterface) {
 				// No service calls expected
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -341,7 +344,7 @@ func TestHandler_Create(t *testing.T) {
 				"description": "New Description",
 				"owner":       1,
 			},
-			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+			setupMocks: func(mockService *MockTaskServiceInterface) {
 				mockService.On("Create", mock.AnythingOfType("*models.Task")).Return(nil, errors.New("database error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -355,11 +358,11 @@ func TestHandler_Create(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockService := &MockTaskServiceInterface{}
-			mockCache := &MockCache{}
+			mockCache := &utils.Cache{} // Use actual cache type
 			mockErrorLogRepo := &MockErrorLogRepository{}
 			mockErrorLogService := errorlog.NewErrorLogService(mockErrorLogRepo)
 
-			tt.setupMocks(mockService, mockCache)
+			tt.setupMocks(mockService)
 
 			handler := NewHandler(mockService, mockErrorLogService, mockCache)
 
@@ -382,7 +385,6 @@ func TestHandler_Create(t *testing.T) {
 			assert.Equal(t, tt.expectedBody["resultMessage"], response["resultMessage"])
 
 			mockService.AssertExpectations(t)
-			mockCache.AssertExpectations(t)
 		})
 	}
 }
@@ -394,7 +396,7 @@ func TestHandler_Update(t *testing.T) {
 		name           string
 		taskID         string
 		requestBody    map[string]interface{}
-		setupMocks     func(*MockTaskServiceInterface, *MockCache)
+		setupMocks     func(*MockTaskServiceInterface)
 		expectedStatus int
 		expectedBody   map[string]interface{}
 	}{
@@ -405,7 +407,7 @@ func TestHandler_Update(t *testing.T) {
 				"title":       "Updated Task",
 				"description": "Updated Description",
 			},
-			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+			setupMocks: func(mockService *MockTaskServiceInterface) {
 				updatedTask := &models.Task{
 					Model: gorm.Model{
 						ID:        1,
@@ -431,7 +433,7 @@ func TestHandler_Update(t *testing.T) {
 			requestBody: map[string]interface{}{
 				"title": "Updated Task",
 			},
-			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+			setupMocks: func(mockService *MockTaskServiceInterface) {
 				// No service calls expected
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -446,7 +448,7 @@ func TestHandler_Update(t *testing.T) {
 			requestBody: map[string]interface{}{
 				"title": "Updated Task",
 			},
-			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+			setupMocks: func(mockService *MockTaskServiceInterface) {
 				mockService.On("Update", 1, mock.AnythingOfType("*models.Task")).Return(nil, errors.New("database error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -460,11 +462,11 @@ func TestHandler_Update(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockService := &MockTaskServiceInterface{}
-			mockCache := &MockCache{}
+			mockCache := &utils.Cache{} // Use actual cache type
 			mockErrorLogRepo := &MockErrorLogRepository{}
 			mockErrorLogService := errorlog.NewErrorLogService(mockErrorLogRepo)
 
-			tt.setupMocks(mockService, mockCache)
+			tt.setupMocks(mockService)
 
 			handler := NewHandler(mockService, mockErrorLogService, mockCache)
 
@@ -488,7 +490,6 @@ func TestHandler_Update(t *testing.T) {
 			assert.Equal(t, tt.expectedBody["resultMessage"], response["resultMessage"])
 
 			mockService.AssertExpectations(t)
-			mockCache.AssertExpectations(t)
 		})
 	}
 }
@@ -499,14 +500,14 @@ func TestHandler_Done(t *testing.T) {
 	tests := []struct {
 		name           string
 		taskID         string
-		setupMocks     func(*MockTaskServiceInterface, *MockCache)
+		setupMocks     func(*MockTaskServiceInterface)
 		expectedStatus int
 		expectedBody   map[string]interface{}
 	}{
 		{
 			name:   "successful mark as done",
 			taskID: "1",
-			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+			setupMocks: func(mockService *MockTaskServiceInterface) {
 				updatedTask := &models.Task{
 					Model: gorm.Model{
 						ID:        1,
@@ -529,7 +530,7 @@ func TestHandler_Done(t *testing.T) {
 		{
 			name:   "invalid id parameter",
 			taskID: "invalid",
-			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+			setupMocks: func(mockService *MockTaskServiceInterface) {
 				// No service calls expected
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -541,7 +542,7 @@ func TestHandler_Done(t *testing.T) {
 		{
 			name:   "service error",
 			taskID: "1",
-			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+			setupMocks: func(mockService *MockTaskServiceInterface) {
 				mockService.On("MarkAsDone", 1).Return(nil, errors.New("database error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -555,11 +556,11 @@ func TestHandler_Done(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockService := &MockTaskServiceInterface{}
-			mockCache := &MockCache{}
+			mockCache := &utils.Cache{} // Use actual cache type
 			mockErrorLogRepo := &MockErrorLogRepository{}
 			mockErrorLogService := errorlog.NewErrorLogService(mockErrorLogRepo)
 
-			tt.setupMocks(mockService, mockCache)
+			tt.setupMocks(mockService)
 
 			handler := NewHandler(mockService, mockErrorLogService, mockCache)
 
@@ -581,7 +582,6 @@ func TestHandler_Done(t *testing.T) {
 			assert.Equal(t, tt.expectedBody["resultMessage"], response["resultMessage"])
 
 			mockService.AssertExpectations(t)
-			mockCache.AssertExpectations(t)
 		})
 	}
 }
@@ -592,14 +592,14 @@ func TestHandler_Delete(t *testing.T) {
 	tests := []struct {
 		name           string
 		taskID         string
-		setupMocks     func(*MockTaskServiceInterface, *MockCache)
+		setupMocks     func(*MockTaskServiceInterface)
 		expectedStatus int
 		expectedBody   map[string]interface{}
 	}{
 		{
 			name:   "successful delete",
 			taskID: "1",
-			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+			setupMocks: func(mockService *MockTaskServiceInterface) {
 				mockService.On("Delete", 1).Return(nil)
 			},
 			expectedStatus: http.StatusOK,
@@ -611,7 +611,7 @@ func TestHandler_Delete(t *testing.T) {
 		{
 			name:   "invalid id parameter",
 			taskID: "invalid",
-			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+			setupMocks: func(mockService *MockTaskServiceInterface) {
 				// No service calls expected
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -623,7 +623,7 @@ func TestHandler_Delete(t *testing.T) {
 		{
 			name:   "service error",
 			taskID: "1",
-			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+			setupMocks: func(mockService *MockTaskServiceInterface) {
 				mockService.On("Delete", 1).Return(errors.New("database error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -637,11 +637,11 @@ func TestHandler_Delete(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockService := &MockTaskServiceInterface{}
-			mockCache := &MockCache{}
+			mockCache := &utils.Cache{} // Use actual cache type
 			mockErrorLogRepo := &MockErrorLogRepository{}
 			mockErrorLogService := errorlog.NewErrorLogService(mockErrorLogRepo)
 
-			tt.setupMocks(mockService, mockCache)
+			tt.setupMocks(mockService)
 
 			handler := NewHandler(mockService, mockErrorLogService, mockCache)
 
@@ -663,7 +663,6 @@ func TestHandler_Delete(t *testing.T) {
 			assert.Equal(t, tt.expectedBody["resultMessage"], response["resultMessage"])
 
 			mockService.AssertExpectations(t)
-			mockCache.AssertExpectations(t)
 		})
 	}
 } 
