@@ -145,12 +145,31 @@ func (h *Handler) ListById(c *gin.Context) {
     // Continue with database retrieval if not in cache
     task, err := h.service.ListById(id)
     if err != nil {
-        // Error handling code...
+        h.errorLogService.LogError("Task_list_by_id", err)
+        
+        // Check if it's a "not found" error
+        if strings.Contains(err.Error(), "not found") {
+            c.JSON(http.StatusNotFound, NewErrorResponse(
+                http.StatusNotFound,
+                utils.OperationFailed,
+                ErrTaskNotFound.Error(),
+            ))
+        } else {
+            c.JSON(http.StatusInternalServerError, NewErrorResponse(
+                http.StatusInternalServerError,
+                utils.OperationFailed,
+                err.Error(),
+            ))
+        }
         return
     }
 
     if task == nil {
-        // Not found handling...
+        c.JSON(http.StatusNotFound, NewErrorResponse(
+            http.StatusNotFound,
+            utils.OperationFailed,
+            ErrTaskNotFound.Error(),
+        ))
         return
     }
 
