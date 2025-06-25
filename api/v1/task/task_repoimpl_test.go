@@ -184,11 +184,14 @@ func TestTaskRepositoryInterface(t *testing.T) {
 // Mock for testing purposes (if needed in the future)
 type MockTaskRepository struct {
 	GetTotalCountFunc func() (int64, error)
+	ListFunc          func(limit int, cursor string, order string) ([]*models.Task, string, string, error)
 	ListByIdFunc      func(id int) (*models.Task, error)
+	SearchByTitleFunc func(title string) (*models.Task, error)
 	CreateFunc        func(task *models.Task) (*models.Task, error)
 	UpdateFunc        func(id int, task *models.Task) (*models.Task, error)
 	MarkAsDoneFunc    func(id int) (*models.Task, error)
 	DeleteFunc        func(id int) error
+	ListByPageFunc    func(page int, limit int, order string) ([]*models.Task, int64, error)
 }
 
 func (m *MockTaskRepository) GetTotalCount() (int64, error) {
@@ -198,9 +201,23 @@ func (m *MockTaskRepository) GetTotalCount() (int64, error) {
 	return 0, errors.New("not implemented")
 }
 
+func (m *MockTaskRepository) List(limit int, cursor string, order string) ([]*models.Task, string, string, error) {
+	if m.ListFunc != nil {
+		return m.ListFunc(limit, cursor, order)
+	}
+	return nil, "", "", errors.New("not implemented")
+}
+
 func (m *MockTaskRepository) ListById(id int) (*models.Task, error) {
 	if m.ListByIdFunc != nil {
 		return m.ListByIdFunc(id)
+	}
+	return nil, errors.New("not implemented")
+}
+
+func (m *MockTaskRepository) SearchByTitle(title string) (*models.Task, error) {
+	if m.SearchByTitleFunc != nil {
+		return m.SearchByTitleFunc(title)
 	}
 	return nil, errors.New("not implemented")
 }
@@ -231,6 +248,13 @@ func (m *MockTaskRepository) Delete(id int) error {
 		return m.DeleteFunc(id)
 	}
 	return errors.New("not implemented")
+}
+
+func (m *MockTaskRepository) ListByPage(page int, limit int, order string) ([]*models.Task, int64, error) {
+	if m.ListByPageFunc != nil {
+		return m.ListByPageFunc(page, limit, order)
+	}
+	return nil, 0, errors.New("not implemented")
 }
 
 func TestMockTaskRepository(t *testing.T) {

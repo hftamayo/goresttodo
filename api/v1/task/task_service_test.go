@@ -28,19 +28,6 @@ func TestTaskService_ListByPage(t *testing.T) {
 			limit: 10,
 			order: "desc",
 			setupMocks: func(mockRepo *MockTaskRepository) {
-				tasks := []*models.Task{
-					{
-						Model: gorm.Model{
-							ID:        1,
-							CreatedAt: time.Now(),
-							UpdatedAt: time.Now(),
-						},
-						Title:       "Test Task 1",
-						Description: "Test Description 1",
-						Done:        false,
-						Owner:       1,
-					},
-				}
 				mockRepo.GetTotalCountFunc = func() (int64, error) {
 					return int64(1), nil
 				}
