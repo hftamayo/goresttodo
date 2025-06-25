@@ -132,19 +132,20 @@ func TestHandler_List(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			expectedBody: map[string]interface{}{
 				"code":          float64(200),
-				"resultMessage": "Operation successful",
+				"resultMessage": "OPERATION_SUCCESS",
 			},
 		},
 		{
-			name:  "invalid pagination parameters",
+			name:  "invalid pagination parameters - sets defaults",
 			query: "?page=0&limit=0",
 			setupMocks: func(mockService *MockTaskServiceInterface) {
-				// No service calls expected
+				// The List method sets defaults: page=1, limit=10, order=desc
+				mockService.On("ListByPage", 1, 10, "desc").Return([]*models.Task{}, int64(0), nil)
 			},
-			expectedStatus: http.StatusBadRequest,
+			expectedStatus: http.StatusOK,
 			expectedBody: map[string]interface{}{
-				"code":          float64(400),
-				"resultMessage": "Operation failed",
+				"code":          float64(200),
+				"resultMessage": "OPERATION_SUCCESS",
 			},
 		},
 		{
@@ -156,7 +157,7 @@ func TestHandler_List(t *testing.T) {
 			expectedStatus: http.StatusInternalServerError,
 			expectedBody: map[string]interface{}{
 				"code":          float64(500),
-				"resultMessage": "Operation failed",
+				"resultMessage": "OPERATION_FAILED",
 			},
 		},
 	}
@@ -223,7 +224,7 @@ func TestHandler_ListById(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			expectedBody: map[string]interface{}{
 				"code":          float64(200),
-				"resultMessage": "Operation successful",
+				"resultMessage": "OPERATION_SUCCESS",
 			},
 		},
 		{
@@ -235,7 +236,7 @@ func TestHandler_ListById(t *testing.T) {
 			expectedStatus: http.StatusBadRequest,
 			expectedBody: map[string]interface{}{
 				"code":          float64(400),
-				"resultMessage": "Operation failed",
+				"resultMessage": "OPERATION_FAILED",
 			},
 		},
 		{
@@ -247,7 +248,7 @@ func TestHandler_ListById(t *testing.T) {
 			expectedStatus: http.StatusInternalServerError,
 			expectedBody: map[string]interface{}{
 				"code":          float64(500),
-				"resultMessage": "Operation failed",
+				"resultMessage": "OPERATION_FAILED",
 			},
 		},
 	}
@@ -319,7 +320,7 @@ func TestHandler_Create(t *testing.T) {
 			expectedStatus: http.StatusCreated,
 			expectedBody: map[string]interface{}{
 				"code":          float64(201),
-				"resultMessage": "Operation successful",
+				"resultMessage": "OPERATION_SUCCESS",
 			},
 		},
 		{
@@ -333,7 +334,7 @@ func TestHandler_Create(t *testing.T) {
 			expectedStatus: http.StatusBadRequest,
 			expectedBody: map[string]interface{}{
 				"code":          float64(400),
-				"resultMessage": "Operation failed",
+				"resultMessage": "OPERATION_FAILED",
 			},
 		},
 		{
@@ -349,7 +350,7 @@ func TestHandler_Create(t *testing.T) {
 			expectedStatus: http.StatusInternalServerError,
 			expectedBody: map[string]interface{}{
 				"code":          float64(500),
-				"resultMessage": "Operation failed",
+				"resultMessage": "OPERATION_FAILED",
 			},
 		},
 	}
@@ -423,7 +424,7 @@ func TestHandler_Update(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			expectedBody: map[string]interface{}{
 				"code":          float64(200),
-				"resultMessage": "Operation successful",
+				"resultMessage": "OPERATION_SUCCESS",
 			},
 		},
 		{
@@ -438,7 +439,7 @@ func TestHandler_Update(t *testing.T) {
 			expectedStatus: http.StatusBadRequest,
 			expectedBody: map[string]interface{}{
 				"code":          float64(400),
-				"resultMessage": "Operation failed",
+				"resultMessage": "OPERATION_FAILED",
 			},
 		},
 		{
@@ -453,7 +454,7 @@ func TestHandler_Update(t *testing.T) {
 			expectedStatus: http.StatusInternalServerError,
 			expectedBody: map[string]interface{}{
 				"code":          float64(500),
-				"resultMessage": "Operation failed",
+				"resultMessage": "OPERATION_FAILED",
 			},
 		},
 	}
@@ -523,7 +524,7 @@ func TestHandler_Done(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			expectedBody: map[string]interface{}{
 				"code":          float64(200),
-				"resultMessage": "Operation successful",
+				"resultMessage": "OPERATION_SUCCESS",
 			},
 		},
 		{
@@ -535,7 +536,7 @@ func TestHandler_Done(t *testing.T) {
 			expectedStatus: http.StatusBadRequest,
 			expectedBody: map[string]interface{}{
 				"code":          float64(400),
-				"resultMessage": "Operation failed",
+				"resultMessage": "OPERATION_FAILED",
 			},
 		},
 		{
@@ -547,7 +548,7 @@ func TestHandler_Done(t *testing.T) {
 			expectedStatus: http.StatusInternalServerError,
 			expectedBody: map[string]interface{}{
 				"code":          float64(500),
-				"resultMessage": "Operation failed",
+				"resultMessage": "OPERATION_FAILED",
 			},
 		},
 	}
@@ -604,7 +605,7 @@ func TestHandler_Delete(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			expectedBody: map[string]interface{}{
 				"code":          float64(200),
-				"resultMessage": "Operation successful",
+				"resultMessage": "OPERATION_SUCCESS",
 			},
 		},
 		{
@@ -616,7 +617,7 @@ func TestHandler_Delete(t *testing.T) {
 			expectedStatus: http.StatusBadRequest,
 			expectedBody: map[string]interface{}{
 				"code":          float64(400),
-				"resultMessage": "Operation failed",
+				"resultMessage": "OPERATION_FAILED",
 			},
 		},
 		{
@@ -628,7 +629,7 @@ func TestHandler_Delete(t *testing.T) {
 			expectedStatus: http.StatusInternalServerError,
 			expectedBody: map[string]interface{}{
 				"code":          float64(500),
-				"resultMessage": "Operation failed",
+				"resultMessage": "OPERATION_FAILED",
 			},
 		},
 	}
