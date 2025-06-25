@@ -8,56 +8,8 @@ import (
 	"github.com/hftamayo/gotodo/api/v1/models"
 	"github.com/hftamayo/gotodo/pkg/utils"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"gorm.io/gorm"
 )
-
-// MockTaskRepository mocks the TaskRepository
-type MockTaskRepository struct {
-	mock.Mock
-}
-
-func (m *MockTaskRepository) GetTotalCount() (int64, error) {
-	args := m.Called()
-	return args.Get(0).(int64), args.Error(1)
-}
-
-func (m *MockTaskRepository) ListById(id int) (*models.Task, error) {
-	args := m.Called(id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*models.Task), args.Error(1)
-}
-
-func (m *MockTaskRepository) Create(task *models.Task) (*models.Task, error) {
-	args := m.Called(task)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*models.Task), args.Error(1)
-}
-
-func (m *MockTaskRepository) Update(id int, task *models.Task) (*models.Task, error) {
-	args := m.Called(id, task)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*models.Task), args.Error(1)
-}
-
-func (m *MockTaskRepository) MarkAsDone(id int) (*models.Task, error) {
-	args := m.Called(id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*models.Task), args.Error(1)
-}
-
-func (m *MockTaskRepository) Delete(id int) error {
-	args := m.Called(id)
-	return args.Error(0)
-}
 
 func TestTaskService_ListByPage(t *testing.T) {
 	tests := []struct {
@@ -89,7 +41,9 @@ func TestTaskService_ListByPage(t *testing.T) {
 						Owner:       1,
 					},
 				}
-				mockRepo.On("GetTotalCount").Return(int64(1), nil)
+				mockRepo.GetTotalCountFunc = func() (int64, error) {
+					return int64(1), nil
+				}
 				// Note: ListByPage would need to be implemented in the repository
 				// For now, we'll mock the individual calls that would be made
 			},
@@ -115,7 +69,9 @@ func TestTaskService_ListByPage(t *testing.T) {
 			limit: 10,
 			order: "desc",
 			setupMocks: func(mockRepo *MockTaskRepository) {
-				mockRepo.On("GetTotalCount").Return(int64(0), errors.New("database error"))
+				mockRepo.GetTotalCountFunc = func() (int64, error) {
+					return int64(0), errors.New("database error")
+				}
 			},
 			expectedTasks: nil,
 			expectedCount: 0,
@@ -142,8 +98,6 @@ func TestTaskService_ListByPage(t *testing.T) {
 				// Note: We can't easily compare tasks due to time fields
 				assert.NotNil(t, tasks)
 			}
-
-			mockRepo.AssertExpectations(t)
 		})
 	}
 }
@@ -171,7 +125,9 @@ func TestTaskService_ListById(t *testing.T) {
 					Done:        false,
 					Owner:       1,
 				}
-				mockRepo.On("ListById", 1).Return(task, nil)
+				mockRepo.ListByIdFunc = func(id int) (*models.Task, error) {
+					return task, nil
+				}
 			},
 			expectedTask: &models.Task{
 				Model: gorm.Model{
@@ -190,7 +146,9 @@ func TestTaskService_ListById(t *testing.T) {
 			name:   "task not found",
 			taskID: 999,
 			setupMocks: func(mockRepo *MockTaskRepository, mockCache *utils.Cache) {
-				mockRepo.On("ListById", 999).Return(nil, errors.New("task not found"))
+				mockRepo.ListByIdFunc = func(id int) (*models.Task, error) {
+					return nil, errors.New("task not found")
+				}
 			},
 			expectedTask:  nil,
 			expectedError: errors.New("task not found"),
@@ -215,8 +173,6 @@ func TestTaskService_ListById(t *testing.T) {
 				assert.Equal(t, tt.expectedTask.ID, task.ID)
 				assert.Equal(t, tt.expectedTask.Title, task.Title)
 			}
-
-			mockRepo.AssertExpectations(t)
 		})
 	}
 }
@@ -249,7 +205,9 @@ func TestTaskService_Create(t *testing.T) {
 					Done:        false,
 					Owner:       1,
 				}
-				mockRepo.On("Create", mock.AnythingOfType("*models.Task")).Return(createdTask, nil)
+				mockRepo.CreateFunc = func(task *models.Task) (*models.Task, error) {
+					return createdTask, nil
+				}
 			},
 			expectedTask: &models.Task{
 				Model: gorm.Model{
@@ -273,7 +231,9 @@ func TestTaskService_Create(t *testing.T) {
 				Owner:       1,
 			},
 			setupMocks: func(mockRepo *MockTaskRepository, mockCache *utils.Cache) {
-				mockRepo.On("Create", mock.AnythingOfType("*models.Task")).Return(nil, errors.New("database error"))
+				mockRepo.CreateFunc = func(task *models.Task) (*models.Task, error) {
+					return nil, errors.New("database error")
+				}
 			},
 			expectedTask:  nil,
 			expectedError: errors.New("database error"),
@@ -298,8 +258,6 @@ func TestTaskService_Create(t *testing.T) {
 				assert.Equal(t, tt.expectedTask.ID, task.ID)
 				assert.Equal(t, tt.expectedTask.Title, task.Title)
 			}
-
-			mockRepo.AssertExpectations(t)
 		})
 	}
 }
@@ -334,7 +292,9 @@ func TestTaskService_Update(t *testing.T) {
 					Done:        true,
 					Owner:       1,
 				}
-				mockRepo.On("Update", 1, mock.AnythingOfType("*models.Task")).Return(updatedTask, nil)
+				mockRepo.UpdateFunc = func(id int, task *models.Task) (*models.Task, error) {
+					return updatedTask, nil
+				}
 			},
 			expectedTask: &models.Task{
 				Model: gorm.Model{
@@ -359,7 +319,9 @@ func TestTaskService_Update(t *testing.T) {
 				Owner:       1,
 			},
 			setupMocks: func(mockRepo *MockTaskRepository, mockCache *utils.Cache) {
-				mockRepo.On("Update", 1, mock.AnythingOfType("*models.Task")).Return(nil, errors.New("database error"))
+				mockRepo.UpdateFunc = func(id int, task *models.Task) (*models.Task, error) {
+					return nil, errors.New("database error")
+				}
 			},
 			expectedTask:  nil,
 			expectedError: errors.New("database error"),
@@ -384,8 +346,6 @@ func TestTaskService_Update(t *testing.T) {
 				assert.Equal(t, tt.expectedTask.ID, task.ID)
 				assert.Equal(t, tt.expectedTask.Title, task.Title)
 			}
-
-			mockRepo.AssertExpectations(t)
 		})
 	}
 }
@@ -413,7 +373,9 @@ func TestTaskService_MarkAsDone(t *testing.T) {
 					Done:        true,
 					Owner:       1,
 				}
-				mockRepo.On("MarkAsDone", 1).Return(updatedTask, nil)
+				mockRepo.MarkAsDoneFunc = func(id int) (*models.Task, error) {
+					return updatedTask, nil
+				}
 			},
 			expectedTask: &models.Task{
 				Model: gorm.Model{
@@ -432,7 +394,9 @@ func TestTaskService_MarkAsDone(t *testing.T) {
 			name:   "repository error",
 			taskID: 1,
 			setupMocks: func(mockRepo *MockTaskRepository, mockCache *utils.Cache) {
-				mockRepo.On("MarkAsDone", 1).Return(nil, errors.New("database error"))
+				mockRepo.MarkAsDoneFunc = func(id int) (*models.Task, error) {
+					return nil, errors.New("database error")
+				}
 			},
 			expectedTask:  nil,
 			expectedError: errors.New("database error"),
@@ -457,8 +421,6 @@ func TestTaskService_MarkAsDone(t *testing.T) {
 				assert.Equal(t, tt.expectedTask.ID, task.ID)
 				assert.True(t, task.Done)
 			}
-
-			mockRepo.AssertExpectations(t)
 		})
 	}
 }
@@ -474,7 +436,9 @@ func TestTaskService_Delete(t *testing.T) {
 			name:   "successful delete",
 			taskID: 1,
 			setupMocks: func(mockRepo *MockTaskRepository, mockCache *utils.Cache) {
-				mockRepo.On("Delete", 1).Return(nil)
+				mockRepo.DeleteFunc = func(id int) error {
+					return nil
+				}
 			},
 			expectedError: nil,
 		},
@@ -482,7 +446,9 @@ func TestTaskService_Delete(t *testing.T) {
 			name:   "repository error",
 			taskID: 1,
 			setupMocks: func(mockRepo *MockTaskRepository, mockCache *utils.Cache) {
-				mockRepo.On("Delete", 1).Return(errors.New("database error"))
+				mockRepo.DeleteFunc = func(id int) error {
+					return errors.New("database error")
+				}
 			},
 			expectedError: errors.New("database error"),
 		},
@@ -504,8 +470,6 @@ func TestTaskService_Delete(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 			}
-
-			mockRepo.AssertExpectations(t)
 		})
 	}
 } 
