@@ -1,6 +1,7 @@
 package task
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -11,69 +12,9 @@ import (
 	"gorm.io/gorm"
 )
 
-// MockDB is a mock implementation of *gorm.DB
+// MockDB mocks the gorm.DB
 type MockDB struct {
 	mock.Mock
-}
-
-func (m *MockDB) Model(value interface{}) *gorm.DB {
-	args := m.Called(value)
-	return args.Get(0).(*gorm.DB)
-}
-
-func (m *MockDB) First(dest interface{}, conds ...interface{}) *gorm.DB {
-	args := m.Called(dest, conds)
-	return args.Get(0).(*gorm.DB)
-}
-
-func (m *MockDB) Create(value interface{}) *gorm.DB {
-	args := m.Called(value)
-	return args.Get(0).(*gorm.DB)
-}
-
-func (m *MockDB) Save(value interface{}) *gorm.DB {
-	args := m.Called(value)
-	return args.Get(0).(*gorm.DB)
-}
-
-func (m *MockDB) Delete(value interface{}, conds ...interface{}) *gorm.DB {
-	args := m.Called(value, conds)
-	return args.Get(0).(*gorm.DB)
-}
-
-func (m *MockDB) Begin() *gorm.DB {
-	args := m.Called()
-	return args.Get(0).(*gorm.DB)
-}
-
-func (m *MockDB) Count(count *int64) *gorm.DB {
-	args := m.Called(count)
-	return args.Get(0).(*gorm.DB)
-}
-
-func (m *MockDB) Order(value interface{}) *gorm.DB {
-	args := m.Called(value)
-	return args.Get(0).(*gorm.DB)
-}
-
-func (m *MockDB) Select(query interface{}, args ...interface{}) *gorm.DB {
-	mockArgs := m.Called(query, args)
-	return mockArgs.Get(0).(*gorm.DB)
-}
-
-func (m *MockDB) Offset(offset int) *gorm.DB {
-	args := m.Called(offset)
-	return args.Get(0).(*gorm.DB)
-}
-
-func (m *MockDB) Limit(limit int) *gorm.DB {
-	args := m.Called(limit)
-	return args.Get(0).(*gorm.DB)
-}
-
-func (m *MockDB) Find(dest interface{}, conds ...interface{}) *gorm.DB {
-	args := m.Called(dest, conds)
-	return args.Get(0).(*gorm.DB)
 }
 
 func (m *MockDB) Where(query interface{}, args ...interface{}) *gorm.DB {
@@ -81,19 +22,59 @@ func (m *MockDB) Where(query interface{}, args ...interface{}) *gorm.DB {
 	return mockArgs.Get(0).(*gorm.DB)
 }
 
-func (m *MockDB) Updates(values interface{}) *gorm.DB {
-	args := m.Called(values)
-	return args.Get(0).(*gorm.DB)
+func (m *MockDB) Find(dest interface{}, conds ...interface{}) *gorm.DB {
+	mockArgs := m.Called(dest, conds)
+	return mockArgs.Get(0).(*gorm.DB)
 }
 
-func (m *MockDB) Commit() *gorm.DB {
-	args := m.Called()
-	return args.Get(0).(*gorm.DB)
+func (m *MockDB) First(dest interface{}, conds ...interface{}) *gorm.DB {
+	mockArgs := m.Called(dest, conds)
+	return mockArgs.Get(0).(*gorm.DB)
 }
 
-func (m *MockDB) Rollback() *gorm.DB {
+func (m *MockDB) Create(value interface{}) *gorm.DB {
+	mockArgs := m.Called(value)
+	return mockArgs.Get(0).(*gorm.DB)
+}
+
+func (m *MockDB) Save(value interface{}) *gorm.DB {
+	mockArgs := m.Called(value)
+	return mockArgs.Get(0).(*gorm.DB)
+}
+
+func (m *MockDB) Delete(value interface{}, conds ...interface{}) *gorm.DB {
+	mockArgs := m.Called(value, conds)
+	return mockArgs.Get(0).(*gorm.DB)
+}
+
+func (m *MockDB) Count(count *int64) *gorm.DB {
+	mockArgs := m.Called(count)
+	return mockArgs.Get(0).(*gorm.DB)
+}
+
+func (m *MockDB) Offset(offset int) *gorm.DB {
+	mockArgs := m.Called(offset)
+	return mockArgs.Get(0).(*gorm.DB)
+}
+
+func (m *MockDB) Limit(limit int) *gorm.DB {
+	mockArgs := m.Called(limit)
+	return mockArgs.Get(0).(*gorm.DB)
+}
+
+func (m *MockDB) Order(value interface{}) *gorm.DB {
+	mockArgs := m.Called(value)
+	return mockArgs.Get(0).(*gorm.DB)
+}
+
+func (m *MockDB) Error() error {
 	args := m.Called()
-	return args.Get(0).(*gorm.DB)
+	return args.Error(0)
+}
+
+func (m *MockDB) RowsAffected() int64 {
+	args := m.Called()
+	return args.Get(0).(int64)
 }
 
 func TestNewTaskRepositoryImpl(t *testing.T) {
@@ -127,109 +108,129 @@ func TestNewTaskRepositoryImpl(t *testing.T) {
 }
 
 func TestTaskRepositoryImpl_GetTotalCount(t *testing.T) {
-	mockDB := new(MockDB)
-	repo := &TaskRepositoryImpl{db: mockDB}
-
 	tests := []struct {
-		name    string
-		setup   func()
-		want    int64
-		wantErr bool
+		name          string
+		setupMock     func(*MockDB)
+		expectedCount int64
+		expectedError error
 	}{
 		{
 			name: "successful count",
-			setup: func() {
-				mockDB.On("Model", &models.Task{}).Return(&gorm.DB{})
-				mockDB.On("Count", mock.Anything).Return(&gorm.DB{Error: nil})
+			setupMock: func(mockDB *MockDB) {
+				mockDB.On("Count", mock.AnythingOfType("*int64")).Return(mockDB).Once()
+				mockDB.On("Error").Return(nil).Once()
 			},
-			want:    10,
-			wantErr: false,
+			expectedCount: 10,
+			expectedError: nil,
 		},
 		{
 			name: "database error",
-			setup: func() {
-				mockDB.On("Model", &models.Task{}).Return(&gorm.DB{})
-				mockDB.On("Count", mock.Anything).Return(&gorm.DB{Error: assert.AnError})
+			setupMock: func(mockDB *MockDB) {
+				mockDB.On("Count", mock.AnythingOfType("*int64")).Return(mockDB).Once()
+				mockDB.On("Error").Return(errors.New("database error")).Once()
 			},
-			want:    0,
-			wantErr: true,
+			expectedCount: 0,
+			expectedError: errors.New("database error"),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setup()
-			got, err := repo.GetTotalCount()
-			if tt.wantErr {
+			mockDB := &MockDB{}
+			tt.setupMock(mockDB)
+
+			repo := &TaskRepositoryImpl{
+				db: mockDB,
+			}
+
+			count, err := repo.GetTotalCount()
+
+			if tt.expectedError != nil {
 				assert.Error(t, err)
+				assert.Equal(t, tt.expectedError.Error(), err.Error())
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tt.want, got)
+				assert.Equal(t, tt.expectedCount, count)
 			}
+
+			mockDB.AssertExpectations(t)
 		})
 	}
 }
 
 func TestTaskRepositoryImpl_ListById(t *testing.T) {
-	mockDB := new(MockDB)
-	repo := &TaskRepositoryImpl{db: mockDB}
-
-	validTask := &models.Task{
-		ID:          1,
-		Title:       "Test Task",
-		Description: "Test Description",
-		Done:        false,
-		Owner:       "test@example.com",
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-	}
-
 	tests := []struct {
-		name    string
-		id      int
-		setup   func()
-		want    *models.Task
-		wantErr bool
+		name          string
+		taskID        int
+		setupMock     func(*MockDB)
+		expectedTask  *models.Task
+		expectedError error
 	}{
 		{
-			name: "valid task",
-			id:   1,
-			setup: func() {
-				mockDB.On("First", mock.Anything, 1).Return(&gorm.DB{Error: nil})
+			name:   "successful get by id",
+			taskID: 1,
+			setupMock: func(mockDB *MockDB) {
+				mockDB.On("Where", "id = ?", 1).Return(mockDB).Once()
+				mockDB.On("First", mock.AnythingOfType("*models.Task")).Return(mockDB).Once()
+				mockDB.On("Error").Return(nil).Once()
 			},
-			want:    validTask,
-			wantErr: false,
+			expectedTask: &models.Task{
+				Model: gorm.Model{
+					ID:        1,
+					CreatedAt: time.Now(),
+					UpdatedAt: time.Now(),
+				},
+				Title:       "Test Task",
+				Description: "Test Description",
+				Done:        false,
+				Owner:       1,
+			},
+			expectedError: nil,
 		},
 		{
-			name: "task not found",
-			id:   999,
-			setup: func() {
-				mockDB.On("First", mock.Anything, 999).Return(&gorm.DB{Error: gorm.ErrRecordNotFound})
+			name:   "task not found",
+			taskID: 999,
+			setupMock: func(mockDB *MockDB) {
+				mockDB.On("Where", "id = ?", 999).Return(mockDB).Once()
+				mockDB.On("First", mock.AnythingOfType("*models.Task")).Return(mockDB).Once()
+				mockDB.On("Error").Return(gorm.ErrRecordNotFound).Once()
 			},
-			want:    nil,
-			wantErr: false,
+			expectedTask:  nil,
+			expectedError: gorm.ErrRecordNotFound,
 		},
 		{
-			name: "database error",
-			id:   1,
-			setup: func() {
-				mockDB.On("First", mock.Anything, 1).Return(&gorm.DB{Error: assert.AnError})
+			name:   "database error",
+			taskID: 1,
+			setupMock: func(mockDB *MockDB) {
+				mockDB.On("Where", "id = ?", 1).Return(mockDB).Once()
+				mockDB.On("First", mock.AnythingOfType("*models.Task")).Return(mockDB).Once()
+				mockDB.On("Error").Return(errors.New("database error")).Once()
 			},
-			want:    nil,
-			wantErr: true,
+			expectedTask:  nil,
+			expectedError: errors.New("database error"),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setup()
-			got, err := repo.ListById(tt.id)
-			if tt.wantErr {
+			mockDB := &MockDB{}
+			tt.setupMock(mockDB)
+
+			repo := &TaskRepositoryImpl{
+				db: mockDB,
+			}
+
+			task, err := repo.ListById(tt.taskID)
+
+			if tt.expectedError != nil {
 				assert.Error(t, err)
+				assert.Equal(t, tt.expectedError.Error(), err.Error())
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tt.want, got)
+				assert.Equal(t, tt.expectedTask, task)
 			}
+
+			mockDB.AssertExpectations(t)
 		})
 	}
 }
@@ -370,278 +371,284 @@ func TestTaskRepositoryImpl_ListByPage(t *testing.T) {
 }
 
 func TestTaskRepositoryImpl_Create(t *testing.T) {
-	mockDB := new(MockDB)
-	repo := &TaskRepositoryImpl{db: mockDB}
-
-	validTask := &models.Task{
-		Title:       "New Task",
-		Description: "New Description",
-		Done:        false,
-		Owner:       "test@example.com",
-	}
-
 	tests := []struct {
-		name    string
-		task    *models.Task
-		setup   func()
-		want    *models.Task
-		wantErr bool
+		name          string
+		task          *models.Task
+		setupMock     func(*MockDB)
+		expectedTask  *models.Task
+		expectedError error
 	}{
 		{
 			name: "successful create",
-			task: validTask,
-			setup: func() {
-				mockDB.On("Create", validTask).Return(&gorm.DB{Error: nil})
+			task: &models.Task{
+				Title:       "New Task",
+				Description: "New Description",
+				Done:        false,
+				Owner:       1,
 			},
-			want:    validTask,
-			wantErr: false,
-		},
-		{
-			name:    "nil task",
-			task:    nil,
-			setup:   func() {},
-			want:    nil,
-			wantErr: true,
+			setupMock: func(mockDB *MockDB) {
+				mockDB.On("Create", mock.AnythingOfType("*models.Task")).Return(mockDB).Once()
+				mockDB.On("Error").Return(nil).Once()
+			},
+			expectedTask: &models.Task{
+				Model: gorm.Model{
+					ID:        1,
+					CreatedAt: time.Now(),
+					UpdatedAt: time.Now(),
+				},
+				Title:       "New Task",
+				Description: "New Description",
+				Done:        false,
+				Owner:       1,
+			},
+			expectedError: nil,
 		},
 		{
 			name: "database error",
-			task: validTask,
-			setup: func() {
-				mockDB.On("Create", validTask).Return(&gorm.DB{Error: assert.AnError})
+			task: &models.Task{
+				Title:       "New Task",
+				Description: "New Description",
+				Done:        false,
+				Owner:       1,
 			},
-			want:    nil,
-			wantErr: true,
+			setupMock: func(mockDB *MockDB) {
+				mockDB.On("Create", mock.AnythingOfType("*models.Task")).Return(mockDB).Once()
+				mockDB.On("Error").Return(errors.New("database error")).Once()
+			},
+			expectedTask:  nil,
+			expectedError: errors.New("database error"),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setup()
-			got, err := repo.Create(tt.task)
-			if tt.wantErr {
+			mockDB := &MockDB{}
+			tt.setupMock(mockDB)
+
+			repo := &TaskRepositoryImpl{
+				db: mockDB,
+			}
+
+			task, err := repo.Create(tt.task)
+
+			if tt.expectedError != nil {
 				assert.Error(t, err)
+				assert.Equal(t, tt.expectedError.Error(), err.Error())
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tt.want, got)
+				assert.Equal(t, tt.expectedTask, task)
 			}
+
+			mockDB.AssertExpectations(t)
 		})
 	}
 }
 
 func TestTaskRepositoryImpl_Update(t *testing.T) {
-	mockDB := new(MockDB)
-	repo := &TaskRepositoryImpl{db: mockDB}
-
-	existingTask := &models.Task{
-		ID:          1,
-		Title:       "Existing Task",
-		Description: "Existing Description",
-		Done:        false,
-		Owner:       "test@example.com",
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-	}
-
-	updatedTask := &models.Task{
-		ID:          1,
-		Title:       "Updated Task",
-		Description: "Updated Description",
-		Done:        true,
-		Owner:       "test@example.com",
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-	}
-
 	tests := []struct {
-		name    string
-		id      int
-		task    *models.Task
-		setup   func()
-		want    *models.Task
-		wantErr bool
+		name          string
+		taskID        int
+		task          *models.Task
+		setupMock     func(*MockDB)
+		expectedTask  *models.Task
+		expectedError error
 	}{
 		{
-			name: "successful update",
-			id:   1,
-			task: updatedTask,
-			setup: func() {
-				mockDB.On("First", mock.Anything, 1).Return(&gorm.DB{Error: nil})
-				mockDB.On("Begin").Return(&gorm.DB{})
-				mockDB.On("Save", updatedTask).Return(&gorm.DB{Error: nil})
-				mockDB.On("First", mock.Anything, 1).Return(&gorm.DB{Error: nil})
-				mockDB.On("Commit").Return(&gorm.DB{Error: nil})
+			name:   "successful update",
+			taskID: 1,
+			task: &models.Task{
+				Title:       "Updated Task",
+				Description: "Updated Description",
+				Done:        true,
+				Owner:       1,
 			},
-			want:    updatedTask,
-			wantErr: false,
+			setupMock: func(mockDB *MockDB) {
+				mockDB.On("Where", "id = ?", 1).Return(mockDB).Once()
+				mockDB.On("Save", mock.AnythingOfType("*models.Task")).Return(mockDB).Once()
+				mockDB.On("Error").Return(nil).Once()
+			},
+			expectedTask: &models.Task{
+				Model: gorm.Model{
+					ID:        1,
+					CreatedAt: time.Now(),
+					UpdatedAt: time.Now(),
+				},
+				Title:       "Updated Task",
+				Description: "Updated Description",
+				Done:        true,
+				Owner:       1,
+			},
+			expectedError: nil,
 		},
 		{
-			name:    "nil task",
-			id:      1,
-			task:    nil,
-			setup:   func() {},
-			want:    nil,
-			wantErr: true,
-		},
-		{
-			name: "task not found",
-			id:   999,
-			task: updatedTask,
-			setup: func() {
-				mockDB.On("First", mock.Anything, 999).Return(&gorm.DB{Error: gorm.ErrRecordNotFound})
+			name:   "database error",
+			taskID: 1,
+			task: &models.Task{
+				Title:       "Updated Task",
+				Description: "Updated Description",
+				Done:        true,
+				Owner:       1,
 			},
-			want:    nil,
-			wantErr: true,
-		},
-		{
-			name: "database error during update",
-			id:   1,
-			task: updatedTask,
-			setup: func() {
-				mockDB.On("First", mock.Anything, 1).Return(&gorm.DB{Error: nil})
-				mockDB.On("Begin").Return(&gorm.DB{})
-				mockDB.On("Save", updatedTask).Return(&gorm.DB{Error: assert.AnError})
+			setupMock: func(mockDB *MockDB) {
+				mockDB.On("Where", "id = ?", 1).Return(mockDB).Once()
+				mockDB.On("Save", mock.AnythingOfType("*models.Task")).Return(mockDB).Once()
+				mockDB.On("Error").Return(errors.New("database error")).Once()
 			},
-			want:    nil,
-			wantErr: true,
+			expectedTask:  nil,
+			expectedError: errors.New("database error"),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setup()
-			got, err := repo.Update(tt.id, tt.task)
-			if tt.wantErr {
+			mockDB := &MockDB{}
+			tt.setupMock(mockDB)
+
+			repo := &TaskRepositoryImpl{
+				db: mockDB,
+			}
+
+			task, err := repo.Update(tt.taskID, tt.task)
+
+			if tt.expectedError != nil {
 				assert.Error(t, err)
+				assert.Equal(t, tt.expectedError.Error(), err.Error())
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tt.want, got)
+				assert.Equal(t, tt.expectedTask, task)
 			}
+
+			mockDB.AssertExpectations(t)
 		})
 	}
 }
 
 func TestTaskRepositoryImpl_MarkAsDone(t *testing.T) {
-	mockDB := new(MockDB)
-	repo := &TaskRepositoryImpl{db: mockDB}
-
-	updatedTask := &models.Task{
-		ID:          1,
-		Title:       "Task",
-		Description: "Description",
-		Done:        true,
-		Owner:       "test@example.com",
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-	}
-
 	tests := []struct {
-		name    string
-		id      int
-		setup   func()
-		want    *models.Task
-		wantErr bool
+		name          string
+		taskID        int
+		setupMock     func(*MockDB)
+		expectedTask  *models.Task
+		expectedError error
 	}{
 		{
-			name: "successful mark as done",
-			id:   1,
-			setup: func() {
-				mockDB.On("Model", &models.Task{}).Return(&gorm.DB{})
-				mockDB.On("Where", "id = ?", 1).Return(&gorm.DB{})
-				mockDB.On("Updates", mock.Anything).Return(&gorm.DB{RowsAffected: 1, Error: nil})
-				mockDB.On("First", mock.Anything, 1).Return(&gorm.DB{Error: nil})
+			name:   "successful mark as done",
+			taskID: 1,
+			setupMock: func(mockDB *MockDB) {
+				mockDB.On("Where", "id = ?", 1).Return(mockDB).Once()
+				mockDB.On("Save", mock.AnythingOfType("*models.Task")).Return(mockDB).Once()
+				mockDB.On("Error").Return(nil).Once()
 			},
-			want:    updatedTask,
-			wantErr: false,
+			expectedTask: &models.Task{
+				Model: gorm.Model{
+					ID:        1,
+					CreatedAt: time.Now(),
+					UpdatedAt: time.Now(),
+				},
+				Title:       "Test Task",
+				Description: "Test Description",
+				Done:        true,
+				Owner:       1,
+			},
+			expectedError: nil,
 		},
 		{
-			name: "task not found",
-			id:   999,
-			setup: func() {
-				mockDB.On("Model", &models.Task{}).Return(&gorm.DB{})
-				mockDB.On("Where", "id = ?", 999).Return(&gorm.DB{})
-				mockDB.On("Updates", mock.Anything).Return(&gorm.DB{RowsAffected: 0, Error: nil})
+			name:   "database error",
+			taskID: 1,
+			setupMock: func(mockDB *MockDB) {
+				mockDB.On("Where", "id = ?", 1).Return(mockDB).Once()
+				mockDB.On("Save", mock.AnythingOfType("*models.Task")).Return(mockDB).Once()
+				mockDB.On("Error").Return(errors.New("database error")).Once()
 			},
-			want:    nil,
-			wantErr: true,
-		},
-		{
-			name: "database error",
-			id:   1,
-			setup: func() {
-				mockDB.On("Model", &models.Task{}).Return(&gorm.DB{})
-				mockDB.On("Where", "id = ?", 1).Return(&gorm.DB{})
-				mockDB.On("Updates", mock.Anything).Return(&gorm.DB{Error: assert.AnError})
-			},
-			want:    nil,
-			wantErr: true,
+			expectedTask:  nil,
+			expectedError: errors.New("database error"),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setup()
-			got, err := repo.MarkAsDone(tt.id)
-			if tt.wantErr {
+			mockDB := &MockDB{}
+			tt.setupMock(mockDB)
+
+			repo := &TaskRepositoryImpl{
+				db: mockDB,
+			}
+
+			task, err := repo.MarkAsDone(tt.taskID)
+
+			if tt.expectedError != nil {
 				assert.Error(t, err)
+				assert.Equal(t, tt.expectedError.Error(), err.Error())
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tt.want, got)
+				assert.Equal(t, tt.expectedTask, task)
 			}
+
+			mockDB.AssertExpectations(t)
 		})
 	}
 }
 
 func TestTaskRepositoryImpl_Delete(t *testing.T) {
-	mockDB := new(MockDB)
-	repo := &TaskRepositoryImpl{db: mockDB}
-
 	tests := []struct {
-		name    string
-		id      int
-		setup   func()
-		wantErr bool
+		name          string
+		taskID        int
+		setupMock     func(*MockDB)
+		expectedError error
 	}{
 		{
-			name: "successful delete",
-			id:   1,
-			setup: func() {
-				mockDB.On("Delete", &models.Task{}, 1).Return(&gorm.DB{RowsAffected: 1, Error: nil})
+			name:   "successful delete",
+			taskID: 1,
+			setupMock: func(mockDB *MockDB) {
+				mockDB.On("Where", "id = ?", 1).Return(mockDB).Once()
+				mockDB.On("Delete", mock.AnythingOfType("*models.Task")).Return(mockDB).Once()
+				mockDB.On("Error").Return(nil).Once()
+				mockDB.On("RowsAffected").Return(int64(1)).Once()
 			},
-			wantErr: false,
+			expectedError: nil,
 		},
 		{
-			name: "invalid id",
-			id:   0,
-			setup: func() {},
-			wantErr: true,
+			name:   "task not found",
+			taskID: 999,
+			setupMock: func(mockDB *MockDB) {
+				mockDB.On("Where", "id = ?", 999).Return(mockDB).Once()
+				mockDB.On("Delete", mock.AnythingOfType("*models.Task")).Return(mockDB).Once()
+				mockDB.On("Error").Return(nil).Once()
+				mockDB.On("RowsAffected").Return(int64(0)).Once()
+			},
+			expectedError: gorm.ErrRecordNotFound,
 		},
 		{
-			name: "task not found",
-			id:   999,
-			setup: func() {
-				mockDB.On("Delete", &models.Task{}, 999).Return(&gorm.DB{RowsAffected: 0, Error: nil})
+			name:   "database error",
+			taskID: 1,
+			setupMock: func(mockDB *MockDB) {
+				mockDB.On("Where", "id = ?", 1).Return(mockDB).Once()
+				mockDB.On("Delete", mock.AnythingOfType("*models.Task")).Return(mockDB).Once()
+				mockDB.On("Error").Return(errors.New("database error")).Once()
 			},
-			wantErr: true,
-		},
-		{
-			name: "database error",
-			id:   1,
-			setup: func() {
-				mockDB.On("Delete", &models.Task{}, 1).Return(&gorm.DB{Error: assert.AnError})
-			},
-			wantErr: true,
+			expectedError: errors.New("database error"),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setup()
-			err := repo.Delete(tt.id)
-			if tt.wantErr {
+			mockDB := &MockDB{}
+			tt.setupMock(mockDB)
+
+			repo := &TaskRepositoryImpl{
+				db: mockDB,
+			}
+
+			err := repo.Delete(tt.taskID)
+
+			if tt.expectedError != nil {
 				assert.Error(t, err)
+				assert.Equal(t, tt.expectedError.Error(), err.Error())
 			} else {
 				assert.NoError(t, err)
 			}
+
+			mockDB.AssertExpectations(t)
 		})
 	}
 } 

@@ -3,9 +3,12 @@ package task
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hftamayo/gotodo/api/v1/errorlog"
@@ -13,596 +16,654 @@ import (
 	"github.com/hftamayo/gotodo/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"gorm.io/gorm"
 )
 
-// MockTaskService is a mock implementation of TaskServiceInterface
-type MockTaskService struct {
+// MockTaskServiceInterface mocks the TaskServiceInterface
+type MockTaskServiceInterface struct {
 	mock.Mock
 }
 
-func (m *MockTaskService) List(cursor string, limit int, order string) ([]*models.Task, string, string, int64, error) {
-	args := m.Called(cursor, limit, order)
-	return args.Get(0).([]*models.Task), args.String(1), args.String(2), args.Get(3).(int64), args.Error(4)
-}
-
-func (m *MockTaskService) ListById(id int) (*models.Task, error) {
-	args := m.Called(id)
-	return args.Get(0).(*models.Task), args.Error(1)
-}
-
-func (m *MockTaskService) Create(task *models.Task) (*models.Task, error) {
-	args := m.Called(task)
-	return args.Get(0).(*models.Task), args.Error(1)
-}
-
-func (m *MockTaskService) Update(id int, task *models.Task) (*models.Task, error) {
-	args := m.Called(id, task)
-	return args.Get(0).(*models.Task), args.Error(1)
-}
-
-func (m *MockTaskService) Delete(id int) error {
-	args := m.Called(id)
-	return args.Error(0)
-}
-
-func (m *MockTaskService) MarkAsDone(id int) (*models.Task, error) {
-	args := m.Called(id)
-	return args.Get(0).(*models.Task), args.Error(1)
-}
-
-func (m *MockTaskService) ListByPage(page int, limit int, order string) ([]*models.Task, int64, error) {
+func (m *MockTaskServiceInterface) ListByPage(page, limit int, order string) ([]*models.Task, int64, error) {
 	args := m.Called(page, limit, order)
 	return args.Get(0).([]*models.Task), args.Get(1).(int64), args.Error(2)
 }
 
-// MockErrorLogService is a mock implementation of errorlog.ErrorLogService
-type MockErrorLogService struct {
+func (m *MockTaskServiceInterface) ListById(id int) (*models.Task, error) {
+	args := m.Called(id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Task), args.Error(1)
+}
+
+func (m *MockTaskServiceInterface) Create(task *models.Task) (*models.Task, error) {
+	args := m.Called(task)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Task), args.Error(1)
+}
+
+func (m *MockTaskServiceInterface) Update(id int, task *models.Task) (*models.Task, error) {
+	args := m.Called(id, task)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Task), args.Error(1)
+}
+
+func (m *MockTaskServiceInterface) MarkAsDone(id int) (*models.Task, error) {
+	args := m.Called(id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Task), args.Error(1)
+}
+
+func (m *MockTaskServiceInterface) Delete(id int) error {
+	args := m.Called(id)
+	return args.Error(0)
+}
+
+// MockErrorLogRepository mocks the ErrorLogRepository
+type MockErrorLogRepository struct {
 	mock.Mock
 }
 
-func (m *MockErrorLogService) LogError(operation string, err error) {
-	m.Called(operation, err)
+func (m *MockErrorLogRepository) LogError(operation string, err error) error {
+	args := m.Called(operation, err)
+	return args.Error(0)
 }
 
-func setupTestRouter(handler *Handler) *gin.Engine {
-	gin.SetMode(gin.TestMode)
-	router := gin.New()
-	
-	router.GET("/tasks", handler.List)
-	router.GET("/tasks/page", handler.ListByPage)
-	router.GET("/tasks/:id", handler.ListById)
-	router.POST("/tasks", handler.Create)
-	router.PUT("/tasks/:id", handler.Update)
-	router.PATCH("/tasks/:id/done", handler.Done)
-	router.DELETE("/tasks/:id", handler.Delete)
-	
-	return router
+// MockCache mocks the Cache
+type MockCache struct {
+	mock.Mock
+}
+
+func (m *MockCache) Set(key string, value interface{}, ttl time.Duration) error {
+	args := m.Called(key, value, ttl)
+	return args.Error(0)
+}
+
+func (m *MockCache) Get(key string, dest interface{}) error {
+	args := m.Called(key, dest)
+	return args.Error(0)
+}
+
+func (m *MockCache) Delete(key string) error {
+	args := m.Called(key)
+	return args.Error(0)
 }
 
 func TestHandler_List(t *testing.T) {
-	mockService := new(MockTaskService)
-	mockErrorLog := new(MockErrorLogService)
-	mockCache := &utils.Cache{}
-	handler := NewHandler(mockService, mockErrorLog, mockCache)
-	router := setupTestRouter(handler)
+	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
 		name           string
-		query         string
-		setupMock     func()
-		expectedCode  int
-		expectedError string
+		query          string
+		setupMocks     func(*MockTaskServiceInterface, *MockCache)
+		expectedStatus int
+		expectedBody   map[string]interface{}
 	}{
 		{
 			name:  "successful list",
-			query: "?limit=10",
-			setupMock: func() {
-				mockService.On("List", "", 10, "").Return(
-					[]*models.Task{},
-					"",
-					"",
-					int64(0),
-					nil,
-				)
+			query: "?page=1&limit=10&order=desc",
+			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+				tasks := []*models.Task{
+					{
+						Model: gorm.Model{
+							ID:        1,
+							CreatedAt: time.Now(),
+							UpdatedAt: time.Now(),
+						},
+						Title:       "Test Task 1",
+						Description: "Test Description 1",
+						Done:        false,
+						Owner:       1,
+					},
+				}
+				mockService.On("ListByPage", 1, 10, "desc").Return(tasks, int64(1), nil)
 			},
-			expectedCode: http.StatusOK,
+			expectedStatus: http.StatusOK,
+			expectedBody: map[string]interface{}{
+				"code":          float64(200),
+				"resultMessage": "Operation successful",
+			},
 		},
 		{
-			name:  "invalid limit",
-			query: "?limit=0",
-			setupMock: func() {
-				mockErrorLog.On("LogError", "Task_list_validation", mock.Anything).Return()
+			name:  "invalid pagination parameters",
+			query: "?page=0&limit=0",
+			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+				// No service calls expected
 			},
-			expectedCode:  http.StatusBadRequest,
-			expectedError: ErrInvalidPaginationParams.Error(),
+			expectedStatus: http.StatusBadRequest,
+			expectedBody: map[string]interface{}{
+				"code":          float64(400),
+				"resultMessage": "Operation failed",
+			},
 		},
 		{
 			name:  "service error",
-			query: "?limit=10",
-			setupMock: func() {
-				mockService.On("List", "", 10, "").Return(
-					nil,
-					"",
-					"",
-					int64(0),
-					assert.AnError,
-				)
-				mockErrorLog.On("LogError", "Task_list", mock.Anything).Return()
+			query: "?page=1&limit=10",
+			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+				mockService.On("ListByPage", 1, 10, "desc").Return([]*models.Task{}, int64(0), errors.New("database error"))
 			},
-			expectedCode:  http.StatusInternalServerError,
-			expectedError: "Failed to fetch tasks",
+			expectedStatus: http.StatusInternalServerError,
+			expectedBody: map[string]interface{}{
+				"code":          float64(500),
+				"resultMessage": "Operation failed",
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMock()
-			
-			w := httptest.NewRecorder()
-			req, _ := http.NewRequest("GET", "/tasks"+tt.query, nil)
-			router.ServeHTTP(w, req)
+			mockService := &MockTaskServiceInterface{}
+			mockCache := &MockCache{}
+			mockErrorLogRepo := &MockErrorLogRepository{}
+			mockErrorLogService := errorlog.NewErrorLogService(mockErrorLogRepo)
 
-			assert.Equal(t, tt.expectedCode, w.Code)
-			
-			if tt.expectedError != "" {
-				var response ErrorResponse
-				err := json.Unmarshal(w.Body.Bytes(), &response)
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedError, response.Error)
-			}
+			tt.setupMocks(mockService, mockCache)
+
+			handler := NewHandler(mockService, mockErrorLogService, mockCache)
+
+			req, _ := http.NewRequest("GET", "/tasks"+tt.query, nil)
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = req
+
+			handler.List(c)
+
+			assert.Equal(t, tt.expectedStatus, w.Code)
+
+			var response map[string]interface{}
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			assert.NoError(t, err)
+
+			assert.Equal(t, tt.expectedBody["code"], response["code"])
+			assert.Equal(t, tt.expectedBody["resultMessage"], response["resultMessage"])
+
+			mockService.AssertExpectations(t)
+			mockCache.AssertExpectations(t)
 		})
 	}
 }
 
 func TestHandler_ListById(t *testing.T) {
-	mockService := new(MockTaskService)
-	mockErrorLog := new(MockErrorLogService)
-	mockCache := &utils.Cache{}
-	handler := NewHandler(mockService, mockErrorLog, mockCache)
-	router := setupTestRouter(handler)
+	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
 		name           string
-		id            string
-		setupMock     func()
-		expectedCode  int
-		expectedError string
+		taskID         string
+		setupMocks     func(*MockTaskServiceInterface, *MockCache)
+		expectedStatus int
+		expectedBody   map[string]interface{}
 	}{
 		{
-			name: "successful get",
-			id:   "1",
-			setupMock: func() {
-				mockService.On("ListById", 1).Return(&models.Task{}, nil)
+			name:   "successful get by id",
+			taskID: "1",
+			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+				task := &models.Task{
+					Model: gorm.Model{
+						ID:        1,
+						CreatedAt: time.Now(),
+						UpdatedAt: time.Now(),
+					},
+					Title:       "Test Task",
+					Description: "Test Description",
+					Done:        false,
+					Owner:       1,
+				}
+				mockService.On("ListById", 1).Return(task, nil)
 			},
-			expectedCode: http.StatusOK,
+			expectedStatus: http.StatusOK,
+			expectedBody: map[string]interface{}{
+				"code":          float64(200),
+				"resultMessage": "Operation successful",
+			},
 		},
 		{
-			name: "invalid id",
-			id:   "invalid",
-			setupMock: func() {
-				mockErrorLog.On("LogError", "Task_list_by_id", mock.Anything).Return()
+			name:   "invalid id parameter",
+			taskID: "invalid",
+			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+				// No service calls expected
 			},
-			expectedCode:  http.StatusBadRequest,
-			expectedError: ErrInvalidID.Error(),
+			expectedStatus: http.StatusBadRequest,
+			expectedBody: map[string]interface{}{
+				"code":          float64(400),
+				"resultMessage": "Operation failed",
+			},
 		},
 		{
-			name: "task not found",
-			id:   "999",
-			setupMock: func() {
-				mockService.On("ListById", 999).Return(nil, nil)
+			name:   "task not found",
+			taskID: "999",
+			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+				mockService.On("ListById", 999).Return(nil, errors.New("task not found"))
 			},
-			expectedCode:  http.StatusNotFound,
-			expectedError: ErrTaskNotFound.Error(),
-		},
-		{
-			name: "service error",
-			id:   "1",
-			setupMock: func() {
-				mockService.On("ListById", 1).Return(nil, assert.AnError)
-				mockErrorLog.On("LogError", "Task_list_by_id", mock.Anything).Return()
+			expectedStatus: http.StatusInternalServerError,
+			expectedBody: map[string]interface{}{
+				"code":          float64(500),
+				"resultMessage": "Operation failed",
 			},
-			expectedCode:  http.StatusInternalServerError,
-			expectedError: "Failed to fetch task",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMock()
-			
-			w := httptest.NewRecorder()
-			req, _ := http.NewRequest("GET", "/tasks/"+tt.id, nil)
-			router.ServeHTTP(w, req)
+			mockService := &MockTaskServiceInterface{}
+			mockCache := &MockCache{}
+			mockErrorLogRepo := &MockErrorLogRepository{}
+			mockErrorLogService := errorlog.NewErrorLogService(mockErrorLogRepo)
 
-			assert.Equal(t, tt.expectedCode, w.Code)
-			
-			if tt.expectedError != "" {
-				var response ErrorResponse
-				err := json.Unmarshal(w.Body.Bytes(), &response)
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedError, response.Error)
-			}
+			tt.setupMocks(mockService, mockCache)
+
+			handler := NewHandler(mockService, mockErrorLogService, mockCache)
+
+			req, _ := http.NewRequest("GET", "/tasks/"+tt.taskID, nil)
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = req
+			c.Params = gin.Params{{Key: "id", Value: tt.taskID}}
+
+			handler.ListById(c)
+
+			assert.Equal(t, tt.expectedStatus, w.Code)
+
+			var response map[string]interface{}
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			assert.NoError(t, err)
+
+			assert.Equal(t, tt.expectedBody["code"], response["code"])
+			assert.Equal(t, tt.expectedBody["resultMessage"], response["resultMessage"])
+
+			mockService.AssertExpectations(t)
+			mockCache.AssertExpectations(t)
 		})
 	}
 }
 
 func TestHandler_Create(t *testing.T) {
-	mockService := new(MockTaskService)
-	mockErrorLog := new(MockErrorLogService)
-	mockCache := &utils.Cache{}
-	handler := NewHandler(mockService, mockErrorLog, mockCache)
-	router := setupTestRouter(handler)
-
-	validRequest := CreateTaskRequest{
-		Title: "New Task",
-		Owner: 1,
-	}
+	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
 		name           string
-		request       interface{}
-		setupMock     func()
-		expectedCode  int
-		expectedError string
+		requestBody    map[string]interface{}
+		setupMocks     func(*MockTaskServiceInterface, *MockCache)
+		expectedStatus int
+		expectedBody   map[string]interface{}
 	}{
 		{
-			name:    "successful create",
-			request: validRequest,
-			setupMock: func() {
-				mockService.On("Create", mock.Anything).Return(&models.Task{}, nil)
+			name: "successful create",
+			requestBody: map[string]interface{}{
+				"title":       "New Task",
+				"description": "New Description",
+				"owner":       1,
 			},
-			expectedCode: http.StatusCreated,
+			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+				createdTask := &models.Task{
+					Model: gorm.Model{
+						ID:        1,
+						CreatedAt: time.Now(),
+						UpdatedAt: time.Now(),
+					},
+					Title:       "New Task",
+					Description: "New Description",
+					Done:        false,
+					Owner:       1,
+				}
+				mockService.On("Create", mock.AnythingOfType("*models.Task")).Return(createdTask, nil)
+			},
+			expectedStatus: http.StatusCreated,
+			expectedBody: map[string]interface{}{
+				"code":          float64(201),
+				"resultMessage": "Operation successful",
+			},
 		},
 		{
-			name:    "invalid request",
-			request: map[string]interface{}{"invalid": "request"},
-			setupMock: func() {
-				mockErrorLog.On("LogError", "Task_create", mock.Anything).Return()
+			name: "invalid request body",
+			requestBody: map[string]interface{}{
+				"title": "", // Invalid empty title
 			},
-			expectedCode:  http.StatusBadRequest,
-			expectedError: ErrInvalidRequest.Error(),
+			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+				// No service calls expected
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedBody: map[string]interface{}{
+				"code":          float64(400),
+				"resultMessage": "Operation failed",
+			},
 		},
 		{
-			name:    "service error",
-			request: validRequest,
-			setupMock: func() {
-				mockService.On("Create", mock.Anything).Return(nil, assert.AnError)
-				mockErrorLog.On("LogError", "Task_create", mock.Anything).Return()
+			name: "service error",
+			requestBody: map[string]interface{}{
+				"title":       "New Task",
+				"description": "New Description",
+				"owner":       1,
 			},
-			expectedCode:  http.StatusInternalServerError,
-			expectedError: "Failed to create task",
+			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+				mockService.On("Create", mock.AnythingOfType("*models.Task")).Return(nil, errors.New("database error"))
+			},
+			expectedStatus: http.StatusInternalServerError,
+			expectedBody: map[string]interface{}{
+				"code":          float64(500),
+				"resultMessage": "Operation failed",
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMock()
-			
-			body, _ := json.Marshal(tt.request)
-			w := httptest.NewRecorder()
-			req, _ := http.NewRequest("POST", "/tasks", bytes.NewBuffer(body))
-			req.Header.Set("Content-Type", "application/json")
-			router.ServeHTTP(w, req)
+			mockService := &MockTaskServiceInterface{}
+			mockCache := &MockCache{}
+			mockErrorLogRepo := &MockErrorLogRepository{}
+			mockErrorLogService := errorlog.NewErrorLogService(mockErrorLogRepo)
 
-			assert.Equal(t, tt.expectedCode, w.Code)
-			
-			if tt.expectedError != "" {
-				var response ErrorResponse
-				err := json.Unmarshal(w.Body.Bytes(), &response)
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedError, response.Error)
-			}
+			tt.setupMocks(mockService, mockCache)
+
+			handler := NewHandler(mockService, mockErrorLogService, mockCache)
+
+			jsonBody, _ := json.Marshal(tt.requestBody)
+			req, _ := http.NewRequest("POST", "/tasks", bytes.NewBuffer(jsonBody))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = req
+
+			handler.Create(c)
+
+			assert.Equal(t, tt.expectedStatus, w.Code)
+
+			var response map[string]interface{}
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			assert.NoError(t, err)
+
+			assert.Equal(t, tt.expectedBody["code"], response["code"])
+			assert.Equal(t, tt.expectedBody["resultMessage"], response["resultMessage"])
+
+			mockService.AssertExpectations(t)
+			mockCache.AssertExpectations(t)
 		})
 	}
 }
 
 func TestHandler_Update(t *testing.T) {
-	mockService := new(MockTaskService)
-	mockErrorLog := new(MockErrorLogService)
-	mockCache := &utils.Cache{}
-	handler := NewHandler(mockService, mockErrorLog, mockCache)
-	router := setupTestRouter(handler)
-
-	validRequest := UpdateTaskRequest{
-		Title:       "Updated Task",
-		Description: "Updated Description",
-	}
+	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
 		name           string
-		id            string
-		request       interface{}
-		setupMock     func()
-		expectedCode  int
-		expectedError string
+		taskID         string
+		requestBody    map[string]interface{}
+		setupMocks     func(*MockTaskServiceInterface, *MockCache)
+		expectedStatus int
+		expectedBody   map[string]interface{}
 	}{
 		{
-			name:    "successful update",
-			id:      "1",
-			request: validRequest,
-			setupMock: func() {
-				mockService.On("Update", 1, mock.Anything).Return(&models.Task{}, nil)
+			name:   "successful update",
+			taskID: "1",
+			requestBody: map[string]interface{}{
+				"title":       "Updated Task",
+				"description": "Updated Description",
 			},
-			expectedCode: http.StatusOK,
+			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+				updatedTask := &models.Task{
+					Model: gorm.Model{
+						ID:        1,
+						CreatedAt: time.Now(),
+						UpdatedAt: time.Now(),
+					},
+					Title:       "Updated Task",
+					Description: "Updated Description",
+					Done:        false,
+					Owner:       1,
+				}
+				mockService.On("Update", 1, mock.AnythingOfType("*models.Task")).Return(updatedTask, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedBody: map[string]interface{}{
+				"code":          float64(200),
+				"resultMessage": "Operation successful",
+			},
 		},
 		{
-			name:    "invalid id",
-			id:      "invalid",
-			request: validRequest,
-			setupMock: func() {
-				mockErrorLog.On("LogError", "Task_update_id", mock.Anything).Return()
+			name:   "invalid id parameter",
+			taskID: "invalid",
+			requestBody: map[string]interface{}{
+				"title": "Updated Task",
 			},
-			expectedCode:  http.StatusBadRequest,
-			expectedError: ErrInvalidID.Error(),
+			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+				// No service calls expected
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedBody: map[string]interface{}{
+				"code":          float64(400),
+				"resultMessage": "Operation failed",
+			},
 		},
 		{
-			name:    "invalid request",
-			id:      "1",
-			request: map[string]interface{}{"invalid": "request"},
-			setupMock: func() {
-				mockErrorLog.On("LogError", "Task_update_binding", mock.Anything).Return()
+			name:   "service error",
+			taskID: "1",
+			requestBody: map[string]interface{}{
+				"title": "Updated Task",
 			},
-			expectedCode:  http.StatusBadRequest,
-			expectedError: ErrInvalidRequest.Error(),
-		},
-		{
-			name:    "service error",
-			id:      "1",
-			request: validRequest,
-			setupMock: func() {
-				mockService.On("Update", 1, mock.Anything).Return(nil, assert.AnError)
-				mockErrorLog.On("LogError", "Task_update", mock.Anything).Return()
+			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+				mockService.On("Update", 1, mock.AnythingOfType("*models.Task")).Return(nil, errors.New("database error"))
 			},
-			expectedCode:  http.StatusInternalServerError,
-			expectedError: "Failed to update task",
+			expectedStatus: http.StatusInternalServerError,
+			expectedBody: map[string]interface{}{
+				"code":          float64(500),
+				"resultMessage": "Operation failed",
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMock()
-			
-			body, _ := json.Marshal(tt.request)
-			w := httptest.NewRecorder()
-			req, _ := http.NewRequest("PUT", "/tasks/"+tt.id, bytes.NewBuffer(body))
-			req.Header.Set("Content-Type", "application/json")
-			router.ServeHTTP(w, req)
+			mockService := &MockTaskServiceInterface{}
+			mockCache := &MockCache{}
+			mockErrorLogRepo := &MockErrorLogRepository{}
+			mockErrorLogService := errorlog.NewErrorLogService(mockErrorLogRepo)
 
-			assert.Equal(t, tt.expectedCode, w.Code)
-			
-			if tt.expectedError != "" {
-				var response ErrorResponse
-				err := json.Unmarshal(w.Body.Bytes(), &response)
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedError, response.Error)
-			}
+			tt.setupMocks(mockService, mockCache)
+
+			handler := NewHandler(mockService, mockErrorLogService, mockCache)
+
+			jsonBody, _ := json.Marshal(tt.requestBody)
+			req, _ := http.NewRequest("PUT", "/tasks/"+tt.taskID, bytes.NewBuffer(jsonBody))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = req
+			c.Params = gin.Params{{Key: "id", Value: tt.taskID}}
+
+			handler.Update(c)
+
+			assert.Equal(t, tt.expectedStatus, w.Code)
+
+			var response map[string]interface{}
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			assert.NoError(t, err)
+
+			assert.Equal(t, tt.expectedBody["code"], response["code"])
+			assert.Equal(t, tt.expectedBody["resultMessage"], response["resultMessage"])
+
+			mockService.AssertExpectations(t)
+			mockCache.AssertExpectations(t)
 		})
 	}
 }
 
 func TestHandler_Done(t *testing.T) {
-	mockService := new(MockTaskService)
-	mockErrorLog := new(MockErrorLogService)
-	mockCache := &utils.Cache{}
-	handler := NewHandler(mockService, mockErrorLog, mockCache)
-	router := setupTestRouter(handler)
+	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
 		name           string
-		id            string
-		setupMock     func()
-		expectedCode  int
-		expectedError string
+		taskID         string
+		setupMocks     func(*MockTaskServiceInterface, *MockCache)
+		expectedStatus int
+		expectedBody   map[string]interface{}
 	}{
 		{
-			name: "successful mark as done",
-			id:   "1",
-			setupMock: func() {
-				mockService.On("MarkAsDone", 1).Return(&models.Task{}, nil)
+			name:   "successful mark as done",
+			taskID: "1",
+			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+				updatedTask := &models.Task{
+					Model: gorm.Model{
+						ID:        1,
+						CreatedAt: time.Now(),
+						UpdatedAt: time.Now(),
+					},
+					Title:       "Test Task",
+					Description: "Test Description",
+					Done:        true,
+					Owner:       1,
+				}
+				mockService.On("MarkAsDone", 1).Return(updatedTask, nil)
 			},
-			expectedCode: http.StatusOK,
+			expectedStatus: http.StatusOK,
+			expectedBody: map[string]interface{}{
+				"code":          float64(200),
+				"resultMessage": "Operation successful",
+			},
 		},
 		{
-			name: "invalid id",
-			id:   "invalid",
-			setupMock: func() {
-				mockErrorLog.On("LogError", "Task_done", mock.Anything).Return()
+			name:   "invalid id parameter",
+			taskID: "invalid",
+			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+				// No service calls expected
 			},
-			expectedCode:  http.StatusBadRequest,
-			expectedError: ErrInvalidID.Error(),
+			expectedStatus: http.StatusBadRequest,
+			expectedBody: map[string]interface{}{
+				"code":          float64(400),
+				"resultMessage": "Operation failed",
+			},
 		},
 		{
-			name: "service error",
-			id:   "1",
-			setupMock: func() {
-				mockService.On("MarkAsDone", 1).Return(nil, assert.AnError)
-				mockErrorLog.On("LogError", "Task_done", mock.Anything).Return()
+			name:   "service error",
+			taskID: "1",
+			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+				mockService.On("MarkAsDone", 1).Return(nil, errors.New("database error"))
 			},
-			expectedCode:  http.StatusInternalServerError,
-			expectedError: "Failed to mark task as done",
+			expectedStatus: http.StatusInternalServerError,
+			expectedBody: map[string]interface{}{
+				"code":          float64(500),
+				"resultMessage": "Operation failed",
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMock()
-			
-			w := httptest.NewRecorder()
-			req, _ := http.NewRequest("PATCH", "/tasks/"+tt.id+"/done", nil)
-			router.ServeHTTP(w, req)
+			mockService := &MockTaskServiceInterface{}
+			mockCache := &MockCache{}
+			mockErrorLogRepo := &MockErrorLogRepository{}
+			mockErrorLogService := errorlog.NewErrorLogService(mockErrorLogRepo)
 
-			assert.Equal(t, tt.expectedCode, w.Code)
-			
-			if tt.expectedError != "" {
-				var response ErrorResponse
-				err := json.Unmarshal(w.Body.Bytes(), &response)
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedError, response.Error)
-			}
+			tt.setupMocks(mockService, mockCache)
+
+			handler := NewHandler(mockService, mockErrorLogService, mockCache)
+
+			req, _ := http.NewRequest("PATCH", "/tasks/"+tt.taskID+"/done", nil)
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = req
+			c.Params = gin.Params{{Key: "id", Value: tt.taskID}}
+
+			handler.Done(c)
+
+			assert.Equal(t, tt.expectedStatus, w.Code)
+
+			var response map[string]interface{}
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			assert.NoError(t, err)
+
+			assert.Equal(t, tt.expectedBody["code"], response["code"])
+			assert.Equal(t, tt.expectedBody["resultMessage"], response["resultMessage"])
+
+			mockService.AssertExpectations(t)
+			mockCache.AssertExpectations(t)
 		})
 	}
 }
 
 func TestHandler_Delete(t *testing.T) {
-	mockService := new(MockTaskService)
-	mockErrorLog := new(MockErrorLogService)
-	mockCache := &utils.Cache{}
-	handler := NewHandler(mockService, mockErrorLog, mockCache)
-	router := setupTestRouter(handler)
+	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
 		name           string
-		id            string
-		setupMock     func()
-		expectedCode  int
-		expectedError string
+		taskID         string
+		setupMocks     func(*MockTaskServiceInterface, *MockCache)
+		expectedStatus int
+		expectedBody   map[string]interface{}
 	}{
 		{
-			name: "successful delete",
-			id:   "1",
-			setupMock: func() {
+			name:   "successful delete",
+			taskID: "1",
+			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
 				mockService.On("Delete", 1).Return(nil)
 			},
-			expectedCode: http.StatusOK,
+			expectedStatus: http.StatusOK,
+			expectedBody: map[string]interface{}{
+				"code":          float64(200),
+				"resultMessage": "Operation successful",
+			},
 		},
 		{
-			name: "invalid id",
-			id:   "invalid",
-			setupMock: func() {
-				mockErrorLog.On("LogError", "Task_delete", mock.Anything).Return()
+			name:   "invalid id parameter",
+			taskID: "invalid",
+			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+				// No service calls expected
 			},
-			expectedCode:  http.StatusBadRequest,
-			expectedError: ErrInvalidID.Error(),
+			expectedStatus: http.StatusBadRequest,
+			expectedBody: map[string]interface{}{
+				"code":          float64(400),
+				"resultMessage": "Operation failed",
+			},
 		},
 		{
-			name: "service error",
-			id:   "1",
-			setupMock: func() {
-				mockService.On("Delete", 1).Return(assert.AnError)
-				mockErrorLog.On("LogError", "Task_delete", mock.Anything).Return()
+			name:   "service error",
+			taskID: "1",
+			setupMocks: func(mockService *MockTaskServiceInterface, mockCache *MockCache) {
+				mockService.On("Delete", 1).Return(errors.New("database error"))
 			},
-			expectedCode:  http.StatusInternalServerError,
-			expectedError: "Failed to delete task",
+			expectedStatus: http.StatusInternalServerError,
+			expectedBody: map[string]interface{}{
+				"code":          float64(500),
+				"resultMessage": "Operation failed",
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMock()
-			
+			mockService := &MockTaskServiceInterface{}
+			mockCache := &MockCache{}
+			mockErrorLogRepo := &MockErrorLogRepository{}
+			mockErrorLogService := errorlog.NewErrorLogService(mockErrorLogRepo)
+
+			tt.setupMocks(mockService, mockCache)
+
+			handler := NewHandler(mockService, mockErrorLogService, mockCache)
+
+			req, _ := http.NewRequest("DELETE", "/tasks/"+tt.taskID, nil)
 			w := httptest.NewRecorder()
-			req, _ := http.NewRequest("DELETE", "/tasks/"+tt.id, nil)
-			router.ServeHTTP(w, req)
+			c, _ := gin.CreateTestContext(w)
+			c.Request = req
+			c.Params = gin.Params{{Key: "id", Value: tt.taskID}}
 
-			assert.Equal(t, tt.expectedCode, w.Code)
-			
-			if tt.expectedError != "" {
-				var response ErrorResponse
-				err := json.Unmarshal(w.Body.Bytes(), &response)
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedError, response.Error)
-			}
-		})
-	}
-}
+			handler.Delete(c)
 
-func TestHandler_ListByPage(t *testing.T) {
-	mockService := new(MockTaskService)
-	mockErrorLog := new(MockErrorLogService)
-	mockCache := &utils.Cache{}
-	handler := NewHandler(mockService, mockErrorLog, mockCache)
-	router := setupTestRouter(handler)
+			assert.Equal(t, tt.expectedStatus, w.Code)
 
-	tests := []struct {
-		name           string
-		query         string
-		setupMock     func()
-		expectedCode  int
-		expectedError string
-	}{
-		{
-			name:  "successful list with default values",
-			query: "",
-			setupMock: func() {
-				mockService.On("ListByPage", 1, utils.DefaultLimit, utils.DefaultOrder).Return(
-					[]*models.Task{},
-					int64(0),
-					nil,
-				)
-			},
-			expectedCode: http.StatusOK,
-		},
-		{
-			name:  "successful list with custom values",
-			query: "?page=2&limit=5&order=asc",
-			setupMock: func() {
-				mockService.On("ListByPage", 2, 5, "asc").Return(
-					[]*models.Task{},
-					int64(0),
-					nil,
-				)
-			},
-			expectedCode: http.StatusOK,
-		},
-		{
-			name:  "invalid page",
-			query: "?page=0",
-			setupMock: func() {
-				mockErrorLog.On("LogError", "Task_list_validation", mock.Anything).Return()
-			},
-			expectedCode:  http.StatusBadRequest,
-			expectedError: ErrInvalidPaginationParams.Error(),
-		},
-		{
-			name:  "invalid limit",
-			query: "?limit=0",
-			setupMock: func() {
-				mockErrorLog.On("LogError", "Task_list_validation", mock.Anything).Return()
-			},
-			expectedCode:  http.StatusBadRequest,
-			expectedError: ErrInvalidPaginationParams.Error(),
-		},
-		{
-			name:  "invalid order",
-			query: "?order=invalid",
-			setupMock: func() {
-				mockErrorLog.On("LogError", "Task_list_validation", mock.Anything).Return()
-			},
-			expectedCode:  http.StatusBadRequest,
-			expectedError: ErrInvalidPaginationParams.Error(),
-		},
-		{
-			name:  "service error",
-			query: "?page=1&limit=10",
-			setupMock: func() {
-				mockService.On("ListByPage", 1, 10, utils.DefaultOrder).Return(
-					nil,
-					int64(0),
-					assert.AnError,
-				)
-				mockErrorLog.On("LogError", "Task_list", mock.Anything).Return()
-			},
-			expectedCode:  http.StatusInternalServerError,
-			expectedError: "Failed to fetch tasks",
-		},
-	}
+			var response map[string]interface{}
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			assert.NoError(t, err)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMock()
-			
-			w := httptest.NewRecorder()
-			req, _ := http.NewRequest("GET", "/tasks/page"+tt.query, nil)
-			router.ServeHTTP(w, req)
+			assert.Equal(t, tt.expectedBody["code"], response["code"])
+			assert.Equal(t, tt.expectedBody["resultMessage"], response["resultMessage"])
 
-			assert.Equal(t, tt.expectedCode, w.Code)
-			
-			if tt.expectedError != "" {
-				var response ErrorResponse
-				err := json.Unmarshal(w.Body.Bytes(), &response)
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedError, response.Error)
-			}
+			mockService.AssertExpectations(t)
+			mockCache.AssertExpectations(t)
 		})
 	}
 } 
