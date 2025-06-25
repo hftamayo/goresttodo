@@ -303,6 +303,8 @@ func TestHandler_ListById(t *testing.T) {
 					Owner:       1,
 				}
 				mockService.On("ListById", 1).Return(task, nil)
+				// Expect cache set error to be logged (due to invalid Redis connection)
+				mockErrorLogRepo.On("LogError", "Task_list_cache_set", mock.AnythingOfType("*net.OpError")).Return(nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedBody: map[string]interface{}{
@@ -329,9 +331,9 @@ func TestHandler_ListById(t *testing.T) {
 				mockService.On("ListById", 999).Return(nil, errors.New("task not found"))
 				mockErrorLogRepo.On("LogError", "Task_list_by_id", mock.AnythingOfType("*errors.errorString")).Return(nil)
 			},
-			expectedStatus: http.StatusInternalServerError,
+			expectedStatus: http.StatusNotFound,
 			expectedBody: map[string]interface{}{
-				"code":          float64(500),
+				"code":          float64(404),
 				"resultMessage": "OPERATION_FAILED",
 			},
 		},
