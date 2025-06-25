@@ -154,38 +154,31 @@ func (m *MockRedisClient) Expire(ctx context.Context, key string, expiration tim
 
 // TestCache is a test double for utils.Cache that avoids nil pointer dereference
 type TestCache struct {
-	*utils.Cache
+	// Don't embed utils.Cache to avoid type issues
 }
 
 // NewTestCache creates a new test cache instance
-func NewTestCache() *TestCache {
-	// Create a TestCache that embeds utils.Cache
-	tc := &TestCache{
-		Cache: &utils.Cache{
-			RedisClient: nil, // This will be overridden by our methods
-		},
+func NewTestCache() *utils.Cache {
+	// Create a Redis client with invalid options that will cause operations to fail
+	// This will simulate cache misses without causing panics
+	redisClient := redis.NewClient(&redis.Options{
+		Addr: "localhost:9999", // Invalid address
+		DB:   0,
+	})
+	
+	return &utils.Cache{
+		RedisClient: redisClient,
 	}
-	return tc
 }
 
-// Get overrides the Get method to return an error (simulating cache miss)
-func (tc *TestCache) Get(key string, dest interface{}) error {
-	return errors.New("cache miss")
-}
-
-// Set overrides the Set method to do nothing (simulating successful cache set)
-func (tc *TestCache) Set(key string, value interface{}, expiration time.Duration) error {
-	return nil
-}
-
-// Delete overrides the Delete method to do nothing
-func (tc *TestCache) Delete(key string) error {
-	return nil
-}
-
-// InvalidateByTags overrides the InvalidateByTags method to do nothing
-func (tc *TestCache) InvalidateByTags(tags ...string) error {
-	return nil
+// Since we can't easily mock the Redis client, let's create a simple approach
+// We'll create a cache with a nil Redis client and handle the panic in tests
+func NewTestCacheSimple() *utils.Cache {
+	// This will cause panics, but we can handle them in tests
+	// Or we can create a minimal Redis client
+	return &utils.Cache{
+		RedisClient: nil, // This will cause panics, but let's see if we can handle them
+	}
 }
 
 func TestHandler_List(t *testing.T) {
