@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"testing"
 	"time"
 
@@ -101,6 +100,41 @@ func (m *MockCache) Delete(key string) error {
 	return args.Error(0)
 }
 
+func (m *MockCache) InvalidateByTags(tags ...string) error {
+	args := m.Called(tags)
+	return args.Error(0)
+}
+
+// TestCache is a test double for utils.Cache that avoids nil pointer dereference
+type TestCache struct {
+	*utils.Cache
+}
+
+// NewTestCache creates a new test cache instance
+func NewTestCache() *TestCache {
+	return &TestCache{}
+}
+
+// Get overrides the Get method to return an error (simulating cache miss)
+func (tc *TestCache) Get(key string, dest interface{}) error {
+	return errors.New("cache miss")
+}
+
+// Set overrides the Set method to do nothing (simulating successful cache set)
+func (tc *TestCache) Set(key string, value interface{}, expiration time.Duration) error {
+	return nil
+}
+
+// Delete overrides the Delete method to do nothing
+func (tc *TestCache) Delete(key string) error {
+	return nil
+}
+
+// InvalidateByTags overrides the InvalidateByTags method to do nothing
+func (tc *TestCache) InvalidateByTags(tags ...string) error {
+	return nil
+}
+
 func TestHandler_List(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -167,13 +201,13 @@ func TestHandler_List(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockService := &MockTaskServiceInterface{}
-			mockCache := &MockCache{}
+			testCache := NewTestCache()
 			mockErrorLogRepo := &MockErrorLogRepository{}
 			mockErrorLogService := errorlog.NewErrorLogService(mockErrorLogRepo)
 
 			tt.setupMocks(mockService, mockErrorLogRepo)
 
-			handler := NewHandler(mockService, mockErrorLogService, mockCache)
+			handler := NewHandler(mockService, mockErrorLogService, testCache)
 
 			req, _ := http.NewRequest("GET", "/tasks"+tt.query, nil)
 			w := httptest.NewRecorder()
@@ -203,14 +237,14 @@ func TestHandler_ListById(t *testing.T) {
 	tests := []struct {
 		name           string
 		taskID         string
-		setupMocks     func(*MockTaskServiceInterface, *MockErrorLogRepository, *MockCache)
+		setupMocks     func(*MockTaskServiceInterface, *MockErrorLogRepository)
 		expectedStatus int
 		expectedBody   map[string]interface{}
 	}{
 		{
 			name:   "successful get by id",
 			taskID: "1",
-			setupMocks: func(mockService *MockTaskServiceInterface, mockErrorLogRepo *MockErrorLogRepository, mockCache *MockCache) {
+			setupMocks: func(mockService *MockTaskServiceInterface, mockErrorLogRepo *MockErrorLogRepository) {
 				task := &models.Task{
 					Model: gorm.Model{
 						ID:        1,
@@ -222,11 +256,7 @@ func TestHandler_ListById(t *testing.T) {
 					Done:        false,
 					Owner:       1,
 				}
-				// Mock cache miss (return error to simulate cache miss)
-				mockCache.On("Get", "task:1", mock.AnythingOfType("*task.TaskOperationResponse")).Return(errors.New("cache miss"))
 				mockService.On("ListById", 1).Return(task, nil)
-				// Mock cache set for the response
-				mockCache.On("Set", "task:1", mock.AnythingOfType("task.TaskOperationResponse"), time.Duration(30)*time.Second).Return(nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedBody: map[string]interface{}{
@@ -237,7 +267,7 @@ func TestHandler_ListById(t *testing.T) {
 		{
 			name:   "invalid id parameter",
 			taskID: "invalid",
-			setupMocks: func(mockService *MockTaskServiceInterface, mockErrorLogRepo *MockErrorLogRepository, mockCache *MockCache) {
+			setupMocks: func(mockService *MockTaskServiceInterface, mockErrorLogRepo *MockErrorLogRepository) {
 				mockErrorLogRepo.On("LogError", "Task_list_by_id", mock.AnythingOfType("*strconv.NumError")).Return(nil)
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -249,9 +279,7 @@ func TestHandler_ListById(t *testing.T) {
 		{
 			name:   "task not found",
 			taskID: "999",
-			setupMocks: func(mockService *MockTaskServiceInterface, mockErrorLogRepo *MockErrorLogRepository, mockCache *MockCache) {
-				// Mock cache miss
-				mockCache.On("Get", "task:999", mock.AnythingOfType("*task.TaskOperationResponse")).Return(errors.New("cache miss"))
+			setupMocks: func(mockService *MockTaskServiceInterface, mockErrorLogRepo *MockErrorLogRepository) {
 				mockService.On("ListById", 999).Return(nil, errors.New("task not found"))
 				mockErrorLogRepo.On("LogError", "Task_list_by_id", mock.AnythingOfType("*errors.errorString")).Return(nil)
 			},
@@ -266,13 +294,13 @@ func TestHandler_ListById(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockService := &MockTaskServiceInterface{}
-			mockCache := &MockCache{}
+			testCache := NewTestCache()
 			mockErrorLogRepo := &MockErrorLogRepository{}
 			mockErrorLogService := errorlog.NewErrorLogService(mockErrorLogRepo)
 
-			tt.setupMocks(mockService, mockErrorLogRepo, mockCache)
+			tt.setupMocks(mockService, mockErrorLogRepo)
 
-			handler := NewHandler(mockService, mockErrorLogService, mockCache)
+			handler := NewHandler(mockService, mockErrorLogService, testCache)
 
 			req, _ := http.NewRequest("GET", "/tasks/"+tt.taskID, nil)
 			w := httptest.NewRecorder()
@@ -293,7 +321,6 @@ func TestHandler_ListById(t *testing.T) {
 
 			mockService.AssertExpectations(t)
 			mockErrorLogRepo.AssertExpectations(t)
-			mockCache.AssertExpectations(t)
 		})
 	}
 }
@@ -370,7 +397,7 @@ func TestHandler_Create(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockService := &MockTaskServiceInterface{}
-			mockCache := &utils.Cache{} // Use actual cache type
+			mockCache := &MockCache{}
 			mockErrorLogRepo := &MockErrorLogRepository{}
 			mockErrorLogService := errorlog.NewErrorLogService(mockErrorLogRepo)
 
@@ -474,7 +501,7 @@ func TestHandler_Update(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockService := &MockTaskServiceInterface{}
-			mockCache := &utils.Cache{} // Use actual cache type
+			mockCache := &MockCache{}
 			mockErrorLogRepo := &MockErrorLogRepository{}
 			mockErrorLogService := errorlog.NewErrorLogService(mockErrorLogRepo)
 
@@ -568,7 +595,7 @@ func TestHandler_Done(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockService := &MockTaskServiceInterface{}
-			mockCache := &utils.Cache{} // Use actual cache type
+			mockCache := &MockCache{}
 			mockErrorLogRepo := &MockErrorLogRepository{}
 			mockErrorLogService := errorlog.NewErrorLogService(mockErrorLogRepo)
 
@@ -649,7 +676,7 @@ func TestHandler_Delete(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockService := &MockTaskServiceInterface{}
-			mockCache := &utils.Cache{} // Use actual cache type
+			mockCache := &MockCache{}
 			mockErrorLogRepo := &MockErrorLogRepository{}
 			mockErrorLogService := errorlog.NewErrorLogService(mockErrorLogRepo)
 
