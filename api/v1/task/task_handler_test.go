@@ -106,14 +106,14 @@ func TestHandler_List(t *testing.T) {
 	tests := []struct {
 		name           string
 		query          string
-		setupMocks     func(*MockTaskServiceInterface)
+		setupMocks     func(*MockTaskServiceInterface, *MockErrorLogRepository)
 		expectedStatus int
 		expectedBody   map[string]interface{}
 	}{
 		{
 			name:  "successful list",
 			query: "?page=1&limit=10&order=desc",
-			setupMocks: func(mockService *MockTaskServiceInterface) {
+			setupMocks: func(mockService *MockTaskServiceInterface, mockErrorLogRepo *MockErrorLogRepository) {
 				tasks := []*models.Task{
 					{
 						Model: gorm.Model{
@@ -138,7 +138,7 @@ func TestHandler_List(t *testing.T) {
 		{
 			name:  "invalid pagination parameters - sets defaults",
 			query: "?page=0&limit=0",
-			setupMocks: func(mockService *MockTaskServiceInterface) {
+			setupMocks: func(mockService *MockTaskServiceInterface, mockErrorLogRepo *MockErrorLogRepository) {
 				// The List method sets defaults: page=1, limit=10, order=desc
 				mockService.On("ListByPage", 1, 10, "desc").Return([]*models.Task{}, int64(0), nil)
 			},
@@ -151,8 +151,9 @@ func TestHandler_List(t *testing.T) {
 		{
 			name:  "service error",
 			query: "?page=1&limit=10",
-			setupMocks: func(mockService *MockTaskServiceInterface) {
+			setupMocks: func(mockService *MockTaskServiceInterface, mockErrorLogRepo *MockErrorLogRepository) {
 				mockService.On("ListByPage", 1, 10, "desc").Return([]*models.Task{}, int64(0), errors.New("database error"))
+				mockErrorLogRepo.On("LogError", "Task_list", mock.AnythingOfType("*errors.errorString")).Return(nil)
 			},
 			expectedStatus: http.StatusInternalServerError,
 			expectedBody: map[string]interface{}{
@@ -169,7 +170,7 @@ func TestHandler_List(t *testing.T) {
 			mockErrorLogRepo := &MockErrorLogRepository{}
 			mockErrorLogService := errorlog.NewErrorLogService(mockErrorLogRepo)
 
-			tt.setupMocks(mockService)
+			tt.setupMocks(mockService, mockErrorLogRepo)
 
 			handler := NewHandler(mockService, mockErrorLogService, mockCache)
 
@@ -190,6 +191,7 @@ func TestHandler_List(t *testing.T) {
 			assert.Equal(t, tt.expectedBody["resultMessage"], response["resultMessage"])
 
 			mockService.AssertExpectations(t)
+			mockErrorLogRepo.AssertExpectations(t)
 		})
 	}
 }
