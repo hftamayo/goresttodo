@@ -159,22 +159,33 @@ type TestCache struct {
 
 // NewTestCache creates a new test cache instance
 func NewTestCache() *utils.Cache {
-	// Create a mock Redis client that returns errors (simulating cache misses)
-	mockRedis := &MockRedisClient{}
-	
-	// Set up the mock to return errors for all operations
-	mockRedis.On("Get", mock.Anything, mock.Anything).Return(redis.NewStringCmd(context.Background(), "redis: nil"))
-	mockRedis.On("Set", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(redis.NewStatusCmd(context.Background(), "OK"))
-	mockRedis.On("Del", mock.Anything, mock.Anything).Return(redis.NewIntCmd(context.Background(), 1))
-	mockRedis.On("Scan", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(redis.NewScanCmd(context.Background()))
-	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.Anything).Return(redis.NewIntCmd(context.Background(), 1))
-	mockRedis.On("SRem", mock.Anything, mock.Anything, mock.Anything).Return(redis.NewIntCmd(context.Background(), 1))
-	mockRedis.On("SMembers", mock.Anything, mock.Anything).Return(redis.NewStringSliceCmd(context.Background()))
-	mockRedis.On("Expire", mock.Anything, mock.Anything, mock.Anything).Return(redis.NewBoolCmd(context.Background(), true))
-	
-	return &utils.Cache{
-		RedisClient: mockRedis,
+	// Create a TestCache that embeds utils.Cache
+	tc := &TestCache{
+		Cache: &utils.Cache{
+			RedisClient: nil, // This will be overridden by our methods
+		},
 	}
+	return tc
+}
+
+// Get overrides the Get method to return an error (simulating cache miss)
+func (tc *TestCache) Get(key string, dest interface{}) error {
+	return errors.New("cache miss")
+}
+
+// Set overrides the Set method to do nothing (simulating successful cache set)
+func (tc *TestCache) Set(key string, value interface{}, expiration time.Duration) error {
+	return nil
+}
+
+// Delete overrides the Delete method to do nothing
+func (tc *TestCache) Delete(key string) error {
+	return nil
+}
+
+// InvalidateByTags overrides the InvalidateByTags method to do nothing
+func (tc *TestCache) InvalidateByTags(tags ...string) error {
+	return nil
 }
 
 func TestHandler_List(t *testing.T) {
@@ -439,13 +450,13 @@ func TestHandler_Create(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockService := &MockTaskServiceInterface{}
-			mockCache := &MockCache{}
+			testCache := NewTestCache()
 			mockErrorLogRepo := &MockErrorLogRepository{}
 			mockErrorLogService := errorlog.NewErrorLogService(mockErrorLogRepo)
 
 			tt.setupMocks(mockService)
 
-			handler := NewHandler(mockService, mockErrorLogService, mockCache)
+			handler := NewHandler(mockService, mockErrorLogService, testCache)
 
 			jsonBody, _ := json.Marshal(tt.requestBody)
 			req, _ := http.NewRequest("POST", "/tasks", bytes.NewBuffer(jsonBody))
@@ -543,13 +554,13 @@ func TestHandler_Update(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockService := &MockTaskServiceInterface{}
-			mockCache := &MockCache{}
+			testCache := NewTestCache()
 			mockErrorLogRepo := &MockErrorLogRepository{}
 			mockErrorLogService := errorlog.NewErrorLogService(mockErrorLogRepo)
 
 			tt.setupMocks(mockService)
 
-			handler := NewHandler(mockService, mockErrorLogService, mockCache)
+			handler := NewHandler(mockService, mockErrorLogService, testCache)
 
 			jsonBody, _ := json.Marshal(tt.requestBody)
 			req, _ := http.NewRequest("PUT", "/tasks/"+tt.taskID, bytes.NewBuffer(jsonBody))
@@ -637,13 +648,13 @@ func TestHandler_Done(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockService := &MockTaskServiceInterface{}
-			mockCache := &MockCache{}
+			testCache := NewTestCache()
 			mockErrorLogRepo := &MockErrorLogRepository{}
 			mockErrorLogService := errorlog.NewErrorLogService(mockErrorLogRepo)
 
 			tt.setupMocks(mockService)
 
-			handler := NewHandler(mockService, mockErrorLogService, mockCache)
+			handler := NewHandler(mockService, mockErrorLogService, testCache)
 
 			req, _ := http.NewRequest("PATCH", "/tasks/"+tt.taskID+"/done", nil)
 			w := httptest.NewRecorder()
@@ -718,13 +729,13 @@ func TestHandler_Delete(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockService := &MockTaskServiceInterface{}
-			mockCache := &MockCache{}
+			testCache := NewTestCache()
 			mockErrorLogRepo := &MockErrorLogRepository{}
 			mockErrorLogService := errorlog.NewErrorLogService(mockErrorLogRepo)
 
 			tt.setupMocks(mockService)
 
-			handler := NewHandler(mockService, mockErrorLogService, mockCache)
+			handler := NewHandler(mockService, mockErrorLogService, testCache)
 
 			req, _ := http.NewRequest("DELETE", "/tasks/"+tt.taskID, nil)
 			w := httptest.NewRecorder()
