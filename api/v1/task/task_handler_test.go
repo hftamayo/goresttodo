@@ -158,7 +158,7 @@ type TestCache struct {
 }
 
 // NewTestCache creates a new test cache instance
-func NewTestCache() *utils.Cache {
+func NewTestCache() *TestCache {
 	// Create a TestCache that embeds utils.Cache
 	tc := &TestCache{
 		Cache: &utils.Cache{
