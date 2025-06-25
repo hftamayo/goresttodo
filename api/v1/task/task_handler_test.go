@@ -2,6 +2,7 @@ package task
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 	"github.com/hftamayo/gotodo/api/v1/errorlog"
 	"github.com/hftamayo/gotodo/api/v1/models"
 	"github.com/hftamayo/gotodo/pkg/utils"
@@ -105,34 +107,74 @@ func (m *MockCache) InvalidateByTags(tags ...string) error {
 	return args.Error(0)
 }
 
+// MockRedisClient is a mock Redis client for testing
+type MockRedisClient struct {
+	mock.Mock
+}
+
+func (m *MockRedisClient) Get(ctx context.Context, key string) *redis.StringCmd {
+	args := m.Called(ctx, key)
+	return args.Get(0).(*redis.StringCmd)
+}
+
+func (m *MockRedisClient) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) *redis.StatusCmd {
+	args := m.Called(ctx, key, value, expiration)
+	return args.Get(0).(*redis.StatusCmd)
+}
+
+func (m *MockRedisClient) Del(ctx context.Context, keys ...string) *redis.IntCmd {
+	args := m.Called(ctx, keys)
+	return args.Get(0).(*redis.IntCmd)
+}
+
+func (m *MockRedisClient) Scan(ctx context.Context, cursor uint64, match string, count int64) *redis.ScanCmd {
+	args := m.Called(ctx, cursor, match, count)
+	return args.Get(0).(*redis.ScanCmd)
+}
+
+func (m *MockRedisClient) SAdd(ctx context.Context, key string, members ...interface{}) *redis.IntCmd {
+	args := m.Called(ctx, key, members)
+	return args.Get(0).(*redis.IntCmd)
+}
+
+func (m *MockRedisClient) SRem(ctx context.Context, key string, members ...interface{}) *redis.IntCmd {
+	args := m.Called(ctx, key, members)
+	return args.Get(0).(*redis.IntCmd)
+}
+
+func (m *MockRedisClient) SMembers(ctx context.Context, key string) *redis.StringSliceCmd {
+	args := m.Called(ctx, key)
+	return args.Get(0).(*redis.StringSliceCmd)
+}
+
+func (m *MockRedisClient) Expire(ctx context.Context, key string, expiration time.Duration) *redis.BoolCmd {
+	args := m.Called(ctx, key, expiration)
+	return args.Get(0).(*redis.BoolCmd)
+}
+
 // TestCache is a test double for utils.Cache that avoids nil pointer dereference
 type TestCache struct {
 	*utils.Cache
 }
 
 // NewTestCache creates a new test cache instance
-func NewTestCache() *TestCache {
-	return &TestCache{}
-}
-
-// Get overrides the Get method to return an error (simulating cache miss)
-func (tc *TestCache) Get(key string, dest interface{}) error {
-	return errors.New("cache miss")
-}
-
-// Set overrides the Set method to do nothing (simulating successful cache set)
-func (tc *TestCache) Set(key string, value interface{}, expiration time.Duration) error {
-	return nil
-}
-
-// Delete overrides the Delete method to do nothing
-func (tc *TestCache) Delete(key string) error {
-	return nil
-}
-
-// InvalidateByTags overrides the InvalidateByTags method to do nothing
-func (tc *TestCache) InvalidateByTags(tags ...string) error {
-	return nil
+func NewTestCache() *utils.Cache {
+	// Create a mock Redis client that returns errors (simulating cache misses)
+	mockRedis := &MockRedisClient{}
+	
+	// Set up the mock to return errors for all operations
+	mockRedis.On("Get", mock.Anything, mock.Anything).Return(redis.NewStringCmd(context.Background(), "redis: nil"))
+	mockRedis.On("Set", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(redis.NewStatusCmd(context.Background(), "OK"))
+	mockRedis.On("Del", mock.Anything, mock.Anything).Return(redis.NewIntCmd(context.Background(), 1))
+	mockRedis.On("Scan", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(redis.NewScanCmd(context.Background()))
+	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.Anything).Return(redis.NewIntCmd(context.Background(), 1))
+	mockRedis.On("SRem", mock.Anything, mock.Anything, mock.Anything).Return(redis.NewIntCmd(context.Background(), 1))
+	mockRedis.On("SMembers", mock.Anything, mock.Anything).Return(redis.NewStringSliceCmd(context.Background()))
+	mockRedis.On("Expire", mock.Anything, mock.Anything, mock.Anything).Return(redis.NewBoolCmd(context.Background(), true))
+	
+	return &utils.Cache{
+		RedisClient: mockRedis,
+	}
 }
 
 func TestHandler_List(t *testing.T) {
