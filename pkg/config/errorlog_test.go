@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
@@ -173,4 +174,48 @@ func TestErrorLogConnect_ConnectionOptions(t *testing.T) {
 		// Verify Redis operations were called
 		mockRedis.AssertExpectations(t)
 	})
+}
+
+func TestMemoryErrorLogger_LogErrorAndGetErrors(t *testing.T) {
+	logger := NewMemoryErrorLogger()
+	err := logger.LogError(context.Background(), "test-service", "test-op", "something went wrong", map[string]interface{}{"foo": "bar"})
+	assert.NoError(t, err)
+	errors := logger.GetErrors()
+	assert.Len(t, errors, 1)
+	assert.Equal(t, "test-service", errors[0]["service"])
+	assert.Equal(t, "test-op", errors[0]["operation"])
+	assert.Equal(t, "something went wrong", errors[0]["error"])
+	assert.Equal(t, map[string]interface{}{"foo": "bar"}, errors[0]["metadata"])
+}
+
+func TestMemoryErrorLogger_ThreadSafety(t *testing.T) {
+	logger := NewMemoryErrorLogger()
+	done := make(chan bool)
+	go func() {
+		for i := 0; i < 100; i++ {
+			logger.LogError(context.Background(), "svc", "op", "err", map[string]interface{}{"i": i})
+		}
+		done <- true
+	}()
+	go func() {
+		for i := 0; i < 100; i++ {
+			logger.GetErrors()
+		}
+		done <- true
+	}()
+	<-done
+	<-done
+	assert.True(t, len(logger.GetErrors()) > 0)
+}
+
+func TestNonBlockingErrorLogger_LogError(t *testing.T) {
+	memLogger := NewMemoryErrorLogger()
+	nbLogger := NewNonBlockingErrorLogger(memLogger)
+	err := nbLogger.LogError(context.Background(), "svc", "op", "err", map[string]interface{}{"foo": "bar"})
+	assert.NoError(t, err)
+	// Wait a moment for goroutine to finish
+	time.Sleep(10 * time.Millisecond)
+	errors := memLogger.GetErrors()
+	assert.Len(t, errors, 1)
+	assert.Equal(t, "svc", errors[0]["service"])
 } 
