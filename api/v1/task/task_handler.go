@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/hftamayo/gotodo/api/v1/errorlog"
 	"github.com/hftamayo/gotodo/api/v1/models"
 	"github.com/hftamayo/gotodo/pkg/utils"
 	"gorm.io/gorm"
@@ -86,6 +85,7 @@ func (h *Handler) ListById(c *gin.Context) {
 		))
 		return
 	}
+	
 	task, err := h.service.ListById(id)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
@@ -103,6 +103,7 @@ func (h *Handler) ListById(c *gin.Context) {
 		}
 		return
 	}
+	
 	if task == nil {
 		c.JSON(http.StatusNotFound, NewErrorResponse(
 			http.StatusNotFound,
@@ -111,14 +112,16 @@ func (h *Handler) ListById(c *gin.Context) {
 		))
 		return
 	}
+	
 	taskETag := generateTaskETag(task)
 	response := TaskOperationResponse{
 		Code:          http.StatusOK,
 		ResultMessage: utils.OperationSuccess,
 		Data:          ToTaskResponse(task),
 		Timestamp:     time.Now().Unix(),
-		CacheTTL:      30,
+		CacheTTL:      60, // Default TTL for individual tasks
 	}
+	
 	lastModified := task.UpdatedAt.UTC().Format(http.TimeFormat)
 	c.Header("ETag", taskETag)
 	c.Header(headerLastModified, lastModified)
@@ -177,35 +180,6 @@ func (h *Handler) buildListResponse(tasks []*models.Task, totalCount int64, page
     return NewTaskOperationResponse(listResponse)
 }
 
-// ListByPage handles the GET /tasks endpoint with pagination
-func (h *Handler) ListByPage(c *gin.Context) {
-    // Validate and parse parameters
-    page, limit, order, err := h.validateListParams(c)
-    if err != nil {
-        c.JSON(http.StatusBadRequest, NewErrorResponse(
-            http.StatusBadRequest,
-            "INVALID_PARAMETERS",
-            err.Error(),
-        ))
-        return
-    }
-
-    // Get tasks from service
-    tasks, totalCount, err := h.service.ListByPage(page, limit, order)
-    if err != nil {
-        c.JSON(http.StatusInternalServerError, NewErrorResponse(
-            http.StatusInternalServerError,
-            "INTERNAL_SERVER_ERROR",
-            "Failed to list tasks",
-        ))
-        return
-    }
-
-    // Build response using existing DTO
-    response := h.buildListResponse(tasks, totalCount, page, limit, order)
-    c.JSON(http.StatusOK, response)
-}
-
 func (h *Handler) Create(c *gin.Context) {
 	var createRequest CreateTaskRequest
 	if err := c.ShouldBindJSON(&createRequest); err != nil {
@@ -216,20 +190,24 @@ func (h *Handler) Create(c *gin.Context) {
 		))
 		return
 	}
+	
 	task := &models.Task{
 		Title:       createRequest.Title,
 		Description: createRequest.Description,
 		Done:        false,
 		Owner:       createRequest.Owner,
 	}
+	
 	createdTask, err := h.service.Create(task)
 	if err != nil {
 		statusCode := http.StatusInternalServerError
 		errorMsg := "Failed to create task"
+		
 		if strings.Contains(err.Error(), "already exists") {
 			statusCode = http.StatusBadRequest
 			errorMsg = err.Error()
 		}
+		
 		c.JSON(statusCode, NewErrorResponse(
 			statusCode,
 			utils.OperationFailed,
@@ -237,13 +215,15 @@ func (h *Handler) Create(c *gin.Context) {
 		))
 		return
 	}
+	
 	response := TaskOperationResponse{
 		Code:          http.StatusCreated,
 		ResultMessage: utils.OperationSuccess,
 		Data:          ToTaskResponse(createdTask),
 		Timestamp:     time.Now().Unix(),
-		CacheTTL:      30,
+		CacheTTL:      30, // Default TTL for new tasks
 	}
+	
 	addCacheHeaders(c, true)
 	c.JSON(http.StatusCreated, response)
 }
@@ -258,6 +238,7 @@ func (h *Handler) Update(c *gin.Context) {
 		))
 		return
 	}
+	
 	var updateRequest UpdateTaskRequest
 	if err := c.ShouldBindJSON(&updateRequest); err != nil {
 		c.JSON(http.StatusBadRequest, NewErrorResponse(
@@ -267,27 +248,39 @@ func (h *Handler) Update(c *gin.Context) {
 		))
 		return
 	}
+	
 	task := &models.Task{
 		Model:       gorm.Model{ID: uint(id)},
 		Title:       updateRequest.Title,
 		Description: updateRequest.Description,
 	}
+	
 	updatedTask, err := h.service.Update(id, task)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, NewErrorResponse(
-			http.StatusInternalServerError,
-			utils.OperationFailed,
-			"Failed to update task",
-		))
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, NewErrorResponse(
+				http.StatusNotFound,
+				utils.OperationFailed,
+				"Task not found",
+			))
+		} else {
+			c.JSON(http.StatusInternalServerError, NewErrorResponse(
+				http.StatusInternalServerError,
+				utils.OperationFailed,
+				"Failed to update task",
+			))
+		}
 		return
 	}
+	
 	response := TaskOperationResponse{
 		Code:          http.StatusOK,
 		ResultMessage: utils.OperationSuccess,
 		Data:          ToTaskResponse(updatedTask),
 		Timestamp:     time.Now().Unix(),
-		CacheTTL:      30,
+		CacheTTL:      30, // Default TTL for updated tasks
 	}
+	
 	addCacheHeaders(c, true)
 	c.JSON(http.StatusOK, response)
 }
@@ -302,22 +295,33 @@ func (h *Handler) Done(c *gin.Context) {
 		))
 		return
 	}
+	
 	updatedTask, err := h.service.MarkAsDone(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, NewErrorResponse(
-			http.StatusInternalServerError,
-			utils.OperationFailed,
-			"Failed to mark task as done",
-		))
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, NewErrorResponse(
+				http.StatusNotFound,
+				utils.OperationFailed,
+				"Task not found",
+			))
+		} else {
+			c.JSON(http.StatusInternalServerError, NewErrorResponse(
+				http.StatusInternalServerError,
+				utils.OperationFailed,
+				"Failed to mark task as done",
+			))
+		}
 		return
 	}
+	
 	response := TaskOperationResponse{
 		Code:          http.StatusOK,
 		ResultMessage: utils.OperationSuccess,
 		Data:          ToTaskResponse(updatedTask),
 		Timestamp:     time.Now().Unix(),
-		CacheTTL:      30,
+		CacheTTL:      30, // Default TTL for completed tasks
 	}
+	
 	addCacheHeaders(c, true)
 	c.JSON(http.StatusOK, response)
 }
@@ -332,20 +336,31 @@ func (h *Handler) Delete(c *gin.Context) {
 		))
 		return
 	}
+	
 	if err := h.service.Delete(id); err != nil {
-		c.JSON(http.StatusInternalServerError, NewErrorResponse(
-			http.StatusInternalServerError,
-			utils.OperationFailed,
-			"Failed to delete task",
-		))
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, NewErrorResponse(
+				http.StatusNotFound,
+				utils.OperationFailed,
+				"Task not found",
+			))
+		} else {
+			c.JSON(http.StatusInternalServerError, NewErrorResponse(
+				http.StatusInternalServerError,
+				utils.OperationFailed,
+				"Failed to delete task",
+			))
+		}
 		return
 	}
+	
 	response := TaskOperationResponse{
 		Code:          http.StatusOK,
 		ResultMessage: utils.OperationSuccess,
 		Data:          nil,
 		Timestamp:     time.Now().Unix(),
 	}
+	
 	addCacheHeaders(c, true)
 	c.JSON(http.StatusOK, response)
 }
