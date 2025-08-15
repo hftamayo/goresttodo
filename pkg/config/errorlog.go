@@ -130,6 +130,30 @@ func (n *NonBlockingErrorLogger) Close() error {
 	return n.logger.Close()
 }
 
+// NewErrorLogger creates an error logger based on the specified type
+// This is a factory function to simplify logger creation
+func NewErrorLogger(loggerType string) (ErrorLogger, error) {
+	switch loggerType {
+	case "redis":
+		return NewRedisErrorLogger()
+	case "memory":
+		return NewMemoryErrorLogger(), nil
+	case "nonblocking":
+		memoryLogger := NewMemoryErrorLogger()
+		return NewNonBlockingErrorLogger(memoryLogger), nil
+	default:
+		// Default to memory logger
+		return NewMemoryErrorLogger(), nil
+	}
+}
+
+// NewErrorLoggerWithDefaults creates a non-blocking memory logger by default
+// This is useful for testing and development
+func NewErrorLoggerWithDefaults() ErrorLogger {
+	memoryLogger := NewMemoryErrorLogger()
+	return NewNonBlockingErrorLogger(memoryLogger)
+}
+
 // ErrorLogConnect creates a Redis client (legacy function for backward compatibility)
 func ErrorLogConnect() (*redis.Client, error) {
 	redisClient := redis.NewClient(&redis.Options{

@@ -28,43 +28,37 @@ var cachedData struct {
 // NewTaskService creates a new task service with default configuration
 // This is the legacy constructor for backward compatibility
 func NewTaskService(repo TaskRepository, cache CacheInterface) TaskServiceInterface {
-	config := DefaultTaskServiceConfig()
-	config.ErrorLogger = config.NewMemoryErrorLogger()
-	if config.AsyncLogging {
-		config.ErrorLogger = config.NewNonBlockingErrorLogger(config.ErrorLogger)
-	}
+	serviceConfig := DefaultTaskServiceConfig()
+	serviceConfig.ErrorLogger = config.NewErrorLoggerWithDefaults()
 	
-	return NewTaskServiceWithConfig(repo, cache, config)
+	return NewTaskServiceWithConfig(repo, cache, serviceConfig)
 }
 
 // NewTaskServiceWithConfig creates a task service with custom configuration
-func NewTaskServiceWithConfig(repo TaskRepository, cache CacheInterface, config *TaskServiceConfig) TaskServiceInterface {
-	if config == nil {
-		config = DefaultTaskServiceConfig()
+func NewTaskServiceWithConfig(repo TaskRepository, cache CacheInterface, serviceConfig *TaskServiceConfig) TaskServiceInterface {
+	if serviceConfig == nil {
+		serviceConfig = DefaultTaskServiceConfig()
 	}
 	
-	if config.ErrorLogger == nil {
-		config.ErrorLogger = config.NewMemoryErrorLogger()
-		if config.AsyncLogging {
-			config.ErrorLogger = config.NewNonBlockingErrorLogger(config.ErrorLogger)
-		}
+	if serviceConfig.ErrorLogger == nil {
+		serviceConfig.ErrorLogger = config.NewErrorLoggerWithDefaults()
 	}
 	
 	return &TaskService{
 		repo:     repo,
 		cache:    cache,
-		errorLog: config.ErrorLogger,
-		config:   config,
+		errorLog: serviceConfig.ErrorLogger,
+		config:   serviceConfig,
 	}
 }
 
 // NewTaskServiceWithErrorLogger creates a task service with a custom error logger
 // This is kept for backward compatibility
 func NewTaskServiceWithErrorLogger(repo TaskRepository, cache CacheInterface, errorLog config.ErrorLogger) TaskServiceInterface {
-	config := DefaultTaskServiceConfig()
-	config.ErrorLogger = errorLog
+	serviceConfig := DefaultTaskServiceConfig()
+	serviceConfig.ErrorLogger = errorLog
 	
-	return NewTaskServiceWithConfig(repo, cache, config)
+	return NewTaskServiceWithConfig(repo, cache, serviceConfig)
 }
 
 func (s *TaskService) List(cursor string, limit int, order string) ([]*models.Task, string, string, int64, error) {

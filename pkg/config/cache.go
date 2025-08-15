@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"time"
@@ -8,6 +9,16 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/hftamayo/gotodo/pkg/utils"
 )
+
+// CacheInterface defines the contract for cache operations
+// This interface matches what the task service expects
+type CacheInterface interface {
+	Get(key string, dest interface{}) error
+	Set(key string, value interface{}, ttl time.Duration) error
+	SetWithTags(key string, value interface{}, ttl time.Duration, tags ...string) error
+	Delete(key string) error
+	InvalidateByTags(tags ...string) error
+}
 
 // CacheConfig holds cache configuration
 type CacheConfig struct {
@@ -72,6 +83,88 @@ func SetupCache(config *CacheConfig) (*utils.Cache, error) {
 func SetupCacheWithDefaults() (*utils.Cache, error) {
 	config := DefaultCacheConfig()
 	return SetupCache(config)
+}
+
+// NewCache creates a new cache instance that implements CacheInterface
+// This is the preferred way to create cache instances for the task service
+func NewCache(config *CacheConfig) (CacheInterface, error) {
+	cache, err := SetupCache(config)
+	if err != nil {
+		return nil, err
+	}
+	return cache, nil
+}
+
+// NewCacheWithDefaults creates a cache instance with default configuration
+// This is the preferred way to create cache instances for the task service
+func NewCacheWithDefaults() (CacheInterface, error) {
+	config := DefaultCacheConfig()
+	return NewCache(config)
+}
+
+// NewMemoryCache creates a memory-based cache for testing
+// This implements CacheInterface but stores data in memory instead of Redis
+func NewMemoryCache() CacheInterface {
+	return &MemoryCache{
+		data: make(map[string]interface{}),
+		ttl:  make(map[string]time.Time),
+	}
+}
+
+// MemoryCache implements CacheInterface using in-memory storage
+// This is useful for testing and development without Redis
+type MemoryCache struct {
+	data map[string]interface{}
+	ttl  map[string]time.Time
+}
+
+func (m *MemoryCache) Get(key string, dest interface{}) error {
+	// Check if key exists and is not expired
+	if value, exists := m.data[key]; exists {
+		if ttl, hasTTL := m.ttl[key]; hasTTL && time.Now().After(ttl) {
+			// Key has expired, remove it
+			delete(m.data, key)
+			delete(m.ttl, key)
+			return fmt.Errorf("key not found or expired")
+		}
+		
+		// For simplicity, we'll just copy the value
+		// In a real implementation, you'd want proper serialization
+		if destPtr, ok := dest.(*interface{}); ok {
+			*destPtr = value
+			return nil
+		}
+		return fmt.Errorf("destination type not supported")
+	}
+	return fmt.Errorf("key not found")
+}
+
+func (m *MemoryCache) Set(key string, value interface{}, ttl time.Duration) error {
+	m.data[key] = value
+	if ttl > 0 {
+		m.ttl[key] = time.Now().Add(ttl)
+	}
+	return nil
+}
+
+func (m *MemoryCache) SetWithTags(key string, value interface{}, ttl time.Duration, tags ...string) error {
+	// For memory cache, we'll just set the value
+	// Tag management would require additional complexity
+	return m.Set(key, value, ttl)
+}
+
+func (m *MemoryCache) Delete(key string) error {
+	delete(m.data, key)
+	delete(m.ttl, key)
+	return nil
+}
+
+func (m *MemoryCache) InvalidateByTags(tags ...string) error {
+	// For memory cache, we'll just clear all data
+	// In a real implementation, you'd want proper tag management
+	m.data = make(map[string]interface{})
+	m.ttl = make(map[string]time.Time)
+	return nil
 }
 
 // Legacy function for backward compatibility
