@@ -41,23 +41,35 @@ func main() {
 		log.Fatalf("Failed to connect to the database: %v", err)
 	}
 
-	fmt.Printf("Setting up Redis connection......\n")
-	redisClient, err := config.ErrorLogConnect()
+	// Setting up cache with new architecture
+	fmt.Printf("Setting up cache...\n")
+	cache, err := config.NewCacheWithDefaults()
 	if err != nil {
-		log.Fatalf("Failed to connect to Redis: %v", err)
+		log.Printf("Warning: Failed to setup Redis cache, falling back to memory cache: %v", err)
+		cache = config.NewMemoryCache()
 	}
 
-	//setting up the cache
-	fmt.Printf("setting up the cache...\n")
-	cache := config.SetupCache(redisClient)
+	// Setting up error logger with new architecture
+	fmt.Printf("Setting up error logger...\n")
+	errorLogger, err := config.NewErrorLogger("redis")
+	if err != nil {
+		log.Printf("Warning: Failed to setup Redis error logger, falling back to memory logger: %v", err)
+		errorLogger = config.NewErrorLoggerWithDefaults()
+	}
 
-	//setting up the rate limiter
+	// Setting up rate limiter (still using Redis for now)
 	fmt.Printf("setting up the rate limiter...\n")
-	rateLimiter := config.SetupRateLimiter(redisClient, 100, time.Minute)
-	r.Use(middleware.RateLimitMiddleware(rateLimiter))
+	redisClient, err := config.ErrorLogConnect()
+	if err != nil {
+		log.Printf("Warning: Failed to connect to Redis for rate limiter, rate limiting will be disabled: %v", err)
+		// TODO: Implement in-memory rate limiter fallback
+	} else {
+		rateLimiter := config.SetupRateLimiter(redisClient, 100, time.Minute)
+		r.Use(middleware.RateLimiter(rateLimiter))
+	}
 
 	fmt.Printf("Setting up routes... \n")
-	routes.SetupRouter(r, db, redisClient, cache)
+	routes.SetupRouter(r, db, cache, errorLogger)
 
     // Server configuration
     server := &http.Server{

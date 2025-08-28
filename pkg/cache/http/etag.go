@@ -22,11 +22,11 @@ func (e *ETagGenerator) Generate(data interface{}) string {
     jsonData, err := json.Marshal(data)
     if err != nil {
         // Fallback to a timestamp-based tag if marshaling fails
-        return fmt.Sprintf("\"%x\"", sha256.Sum256([]byte(fmt.Sprintf("%d", time.Now().UnixNano()))))
+        return fmt.Sprintf(eTagCharacterFmt, sha256.Sum256([]byte(fmt.Sprintf("%d", time.Now().UnixNano()))))
     }
     
     hash := sha256.Sum256(jsonData)
-    return fmt.Sprintf("\"%x\"", hash)
+    return fmt.Sprintf(eTagCharacterFmt, hash)
 }
 
 // GenerateFromTasks creates an ETag specifically for task collections
@@ -36,5 +36,5 @@ func (e *ETagGenerator) GenerateFromTasks(tasks []*models.Task) string {
         hash.Write([]byte(fmt.Sprintf("%d-%s-%t-%d", 
             task.ID, task.Title, task.Done, task.UpdatedAt.UnixNano())))
     }
-    return fmt.Sprintf("\"%x\"", hash.Sum(nil))
+    return fmt.Sprintf(eTagCharacterFmt, hash.Sum(nil))
 }
