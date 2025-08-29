@@ -77,6 +77,7 @@ func SetupCache(config *CacheConfig) (*utils.Cache, error) {
 		return nil, err
 	}
 
+	// The real redis.Client implements RedisClientInterface, so this will work
 	return utils.NewCache(redisClient), nil
 }
 
