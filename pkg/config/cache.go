@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strconv"
@@ -71,7 +72,7 @@ func SetupCache(config *CacheConfig) (*utils.Cache, error) {
 	})
 
 	// Test the connection
-	ctx := redisClient.Context()
+	ctx := context.Background()
 	if err := redisClient.Ping(ctx).Err(); err != nil {
 		return nil, err
 	}
