@@ -13,7 +13,7 @@ func SetupTaskRoutes(r *gin.Engine, handler *task.Handler) {
     taskGroup := r.Group(basePath)
     {
         taskGroup.GET("/list", handler.List)
-        taskGroup.GET("/list/page", handler.ListByPage)
+        taskGroup.GET("/list/page", handler.List)
         taskGroup.GET("/:id", handler.ListById)
         taskGroup.POST("", handler.Create)
         taskGroup.PATCH("/:id", handler.Update)

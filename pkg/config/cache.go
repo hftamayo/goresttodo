@@ -170,7 +170,7 @@ func (m *MemoryCache) InvalidateByTags(tags ...string) error {
 }
 
 // Legacy function for backward compatibility
-func SetupCacheLegacy(redisClient *redis.Client) *utils.Cache {
+func SetupCacheLegacy(redisClient utils.RedisClientInterface) *utils.Cache {
 	return utils.NewCache(redisClient)
 }
 

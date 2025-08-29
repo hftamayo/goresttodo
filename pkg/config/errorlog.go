@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/hftamayo/gotodo/pkg/utils"
 )
 
 // ErrorLogger defines the interface for error logging operations
@@ -19,7 +20,7 @@ type ErrorLogger interface {
 
 // RedisErrorLogger implements ErrorLogger using Redis
 type RedisErrorLogger struct {
-	client *redis.Client
+	client utils.RedisClientInterface
 }
 
 // NewRedisErrorLogger creates a new Redis-based error logger
@@ -155,7 +156,7 @@ func NewErrorLoggerWithDefaults() ErrorLogger {
 }
 
 // ErrorLogConnect creates a Redis client (legacy function for backward compatibility)
-func ErrorLogConnect() (*redis.Client, error) {
+func ErrorLogConnect() (utils.RedisClientInterface, error) {
 	redisClient := redis.NewClient(&redis.Options{
 		Addr: os.Getenv("REDIS_HOST") + ":" + os.Getenv("REDIS_PORT"),
 	})
