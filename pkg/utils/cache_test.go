@@ -55,8 +55,12 @@ func (m *MockRedisClient) Expire(ctx context.Context, key string, expiration tim
 	return args.Get(0).(*redis.BoolCmd)
 }
 
+// TestNewCache tests the NewCache function
 func TestNewCache(t *testing.T) {
-	mockClient := new(MockRedisClient)
+	// Create a mock that implements RedisClientInterface
+	mockClient := &MockRedisClient{}
+	
+	// Now NewCache should accept our mock since it implements RedisClientInterface
 	cache := NewCache(mockClient)
 	
 	assert.NotNil(t, cache)
