@@ -19,6 +19,10 @@ type RedisClientInterface interface {
 	SRem(ctx context.Context, key string, members ...interface{}) *redis.IntCmd
 	SMembers(ctx context.Context, key string) *redis.StringSliceCmd
 	Expire(ctx context.Context, key string, expiration time.Duration) *redis.BoolCmd
+	Incr(ctx context.Context, key string) *redis.IntCmd
+	HSet(ctx context.Context, key string, values ...interface{}) *redis.IntCmd
+	HMSet(ctx context.Context, key string, values ...interface{}) *redis.BoolCmd
+	Close() error
 }
 
 type Cache struct {

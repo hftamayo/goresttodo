@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"sync"
 	"time"
-
-	"github.com/redis/go-redis/v9"
 )
 
 // OperationType represents the type of operation being rate limited
@@ -25,13 +23,13 @@ type RateLimitConfig struct {
 }
 
 type RateLimiter struct {
-	RedisClient *redis.Client
+	RedisClient RedisClientInterface
 	operationLimits map[OperationType]int
 	Window          time.Duration
 	mu              sync.RWMutex
 }
 
-func NewRateLimiter(redisClient *redis.Client) *RateLimiter {
+func NewRateLimiter(redisClient RedisClientInterface) *RateLimiter {
 	return &RateLimiter{
 		RedisClient: redisClient,
 		operationLimits: map[OperationType]int{
