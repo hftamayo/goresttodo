@@ -151,7 +151,7 @@ func (r *TaskRepositoryImpl) Update(id int, task *models.Task) (*models.Task, er
      var existingTask models.Task
     if err := r.db.First(&existingTask, id).Error; err != nil {
         if errors.Is(err, gorm.ErrRecordNotFound) {
-            return nil, fmt.Errorf(errTaskNotFoundFmt, id)
+            return nil, fmt.Errorf(utils.ErrTaskNotFoundFmt, id)
         }
         return nil, fmt.Errorf("failed to verify task existence: %w", err)
     }
@@ -188,7 +188,7 @@ func (r *TaskRepositoryImpl) MarkAsDone(id int) (*models.Task, error) {
         return nil, fmt.Errorf("failed to mark task as done: %w", result.Error)
     }
     if result.RowsAffected == 0 {
-        return nil, fmt.Errorf(errTaskNotFoundFmt, id)
+        return nil, fmt.Errorf(utils.ErrTaskNotFoundFmt, id)
     }
     
     if err := r.db.First(&task, id).Error; err != nil {
@@ -210,7 +210,7 @@ func (r *TaskRepositoryImpl) Delete(id int) error {
     }
 
     if result.RowsAffected == 0 {
-        return fmt.Errorf(errTaskNotFoundFmt, id)
+        return fmt.Errorf(utils.ErrTaskNotFoundFmt, id)
     }
 
     return nil

@@ -14,3 +14,8 @@ const (
     // Default order direction
     DefaultOrder = "desc"
 )
+
+// Error message constants
+const (
+    ErrTaskNotFoundFmt = "task with id %d not found"
+)
