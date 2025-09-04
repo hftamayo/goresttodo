@@ -10,20 +10,7 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// MockRedisClient is a mock implementation of redis.Client
-type MockRedisClient struct {
-	mock.Mock
-}
-
-func (m *MockRedisClient) Incr(ctx context.Context, key string) *redis.IntCmd {
-	args := m.Called(ctx, key)
-	return args.Get(0).(*redis.IntCmd)
-}
-
-func (m *MockRedisClient) Expire(ctx context.Context, key string, expiration time.Duration) *redis.BoolCmd {
-	args := m.Called(ctx, key, expiration)
-	return args.Get(0).(*redis.BoolCmd)
-}
+// MockRedisClient is defined in cache_test.go
 
 func TestNewRateLimiter(t *testing.T) {
 	mockClient := new(MockRedisClient)

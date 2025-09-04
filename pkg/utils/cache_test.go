@@ -55,6 +55,26 @@ func (m *MockRedisClient) Expire(ctx context.Context, key string, expiration tim
 	return args.Get(0).(*redis.BoolCmd)
 }
 
+func (m *MockRedisClient) Incr(ctx context.Context, key string) *redis.IntCmd {
+	args := m.Called(ctx, key)
+	return args.Get(0).(*redis.IntCmd)
+}
+
+func (m *MockRedisClient) HSet(ctx context.Context, key string, values ...interface{}) *redis.IntCmd {
+	args := m.Called(ctx, key, values)
+	return args.Get(0).(*redis.IntCmd)
+}
+
+func (m *MockRedisClient) HMSet(ctx context.Context, key string, values ...interface{}) *redis.BoolCmd {
+	args := m.Called(ctx, key, values)
+	return args.Get(0).(*redis.BoolCmd)
+}
+
+func (m *MockRedisClient) Close() error {
+	args := m.Called()
+	return args.Error(0)
+}
+
 // TestNewCache tests the NewCache function
 func TestNewCache(t *testing.T) {
 	// Create a mock that implements RedisClientInterface
@@ -256,7 +276,7 @@ func TestCache_DeletePattern(t *testing.T) {
 			pattern: "test-*",
 			setupMock: func(m *MockRedisClient) {
 				// Setup scan iterator
-				scanCmd := redis.NewScanCmd(context.Background())
+				scanCmd := &redis.ScanCmd{}
 				scanCmd.SetVal([]string{"test-1", "test-2"}, 0)
 				m.On("Scan", mock.Anything, uint64(0), "test-*", int64(0)).Return(scanCmd)
 
@@ -272,7 +292,7 @@ func TestCache_DeletePattern(t *testing.T) {
 			name:    "scan error",
 			pattern: "test-*",
 			setupMock: func(m *MockRedisClient) {
-				scanCmd := redis.NewScanCmd(context.Background())
+				scanCmd := &redis.ScanCmd{}
 				scanCmd.SetErr(redis.ErrClosed)
 				m.On("Scan", mock.Anything, uint64(0), "test-*", int64(0)).Return(scanCmd)
 			},
@@ -311,7 +331,7 @@ func TestCache_DeleteByPrefix(t *testing.T) {
 			prefix: "test",
 			setupMock: func(m *MockRedisClient) {
 				// Setup scan iterator
-				scanCmd := redis.NewScanCmd(context.Background())
+				scanCmd := &redis.ScanCmd{}
 				scanCmd.SetVal([]string{"test-1", "test-2"}, 0)
 				m.On("Scan", mock.Anything, uint64(0), "test*", int64(0)).Return(scanCmd)
 
@@ -369,8 +389,8 @@ func TestCache_SetWithTags(t *testing.T) {
 				// Setup SAdd commands
 				saddCmd := redis.NewIntCmd(context.Background())
 				saddCmd.SetVal(1)
-				m.On("SAdd", mock.Anything, "tag:tag1", "test-key").Return(saddCmd)
-				m.On("SAdd", mock.Anything, "tag:tag2", "test-key").Return(saddCmd)
+				m.On("SAdd", mock.Anything, "tag:tag1", []interface{}{"test-key"}).Return(saddCmd)
+				m.On("SAdd", mock.Anything, "tag:tag2", []interface{}{"test-key"}).Return(saddCmd)
 
 				// Setup Expire commands
 				expireCmd := redis.NewBoolCmd(context.Background())
@@ -489,7 +509,7 @@ func TestCache_AddTag(t *testing.T) {
 			setupMock: func(m *MockRedisClient) {
 				saddCmd := redis.NewIntCmd(context.Background())
 				saddCmd.SetVal(1)
-				m.On("SAdd", mock.Anything, "tag:test-tag", "test-key").Return(saddCmd)
+				m.On("SAdd", mock.Anything, "tag:test-tag", []interface{}{"test-key"}).Return(saddCmd)
 			},
 			expectedError: false,
 		},
@@ -500,7 +520,7 @@ func TestCache_AddTag(t *testing.T) {
 			setupMock: func(m *MockRedisClient) {
 				saddCmd := redis.NewIntCmd(context.Background())
 				saddCmd.SetErr(redis.ErrClosed)
-				m.On("SAdd", mock.Anything, "tag:test-tag", "test-key").Return(saddCmd)
+				m.On("SAdd", mock.Anything, "tag:test-tag", []interface{}{"test-key"}).Return(saddCmd)
 			},
 			expectedError: true,
 		},
@@ -540,7 +560,7 @@ func TestCache_RemoveTag(t *testing.T) {
 			setupMock: func(m *MockRedisClient) {
 				sremCmd := redis.NewIntCmd(context.Background())
 				sremCmd.SetVal(1)
-				m.On("SRem", mock.Anything, "tag:test-tag", "test-key").Return(sremCmd)
+				m.On("SRem", mock.Anything, "tag:test-tag", []interface{}{"test-key"}).Return(sremCmd)
 			},
 			expectedError: false,
 		},
@@ -551,7 +571,7 @@ func TestCache_RemoveTag(t *testing.T) {
 			setupMock: func(m *MockRedisClient) {
 				sremCmd := redis.NewIntCmd(context.Background())
 				sremCmd.SetErr(redis.ErrClosed)
-				m.On("SRem", mock.Anything, "tag:test-tag", "test-key").Return(sremCmd)
+				m.On("SRem", mock.Anything, "tag:test-tag", []interface{}{"test-key"}).Return(sremCmd)
 			},
 			expectedError: true,
 		},
