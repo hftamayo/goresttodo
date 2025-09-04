@@ -1,7 +1,6 @@
 package core
 
 import (
-	"encoding/json"
 	"fmt"
 	"sync"
 	"testing"
@@ -136,7 +135,7 @@ func TestInMemoryClient_Get(t *testing.T) {
 			key:         "struct_key",
 			dest:        new(map[string]interface{}),
 			expectErr:   false,
-			expectedVal: map[string]interface{}{"name": "test", "age": 25},
+			expectedVal: map[string]interface{}{"name": "test", "age": float64(25)},
 			description: "Should retrieve existing struct value",
 		},
 		{
