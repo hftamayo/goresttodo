@@ -9,6 +9,7 @@ import (
 
 	"github.com/hftamayo/gotodo/api/v1/models"
 	"github.com/stretchr/testify/assert"
+	"gorm.io/gorm"
 )
 
 func TestNewETagGenerator(t *testing.T) {
@@ -164,10 +165,12 @@ func TestETagGenerator_GenerateFromTasks(t *testing.T) {
 			name: "generate from single task",
 			tasks: []*models.Task{
 				{
-					Model: models.Model{ID: 1},
+					Model: gorm.Model{
+						ID:        1,
+						UpdatedAt: time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC),
+					},
 					Title: "Test Task",
 					Done:  false,
-					UpdatedAt: time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC),
 				},
 			},
 			expectValid: true,
@@ -177,16 +180,20 @@ func TestETagGenerator_GenerateFromTasks(t *testing.T) {
 			name: "generate from multiple tasks",
 			tasks: []*models.Task{
 				{
-					Model: models.Model{ID: 1},
+					Model: gorm.Model{
+						ID:        1,
+						UpdatedAt: time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC),
+					},
 					Title: "Task 1",
 					Done:  false,
-					UpdatedAt: time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC),
 				},
 				{
-					Model: models.Model{ID: 2},
+					Model: gorm.Model{
+						ID:        2,
+						UpdatedAt: time.Date(2023, 1, 2, 12, 0, 0, 0, time.UTC),
+					},
 					Title: "Task 2",
 					Done:  true,
-					UpdatedAt: time.Date(2023, 1, 2, 12, 0, 0, 0, time.UTC),
 				},
 			},
 			expectValid: true,
@@ -208,10 +215,12 @@ func TestETagGenerator_GenerateFromTasks(t *testing.T) {
 			name: "generate from tasks with special characters",
 			tasks: []*models.Task{
 				{
-					Model: models.Model{ID: 1},
+					Model: gorm.Model{
+						ID:        1,
+						UpdatedAt: time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC),
+					},
 					Title: "Task with émojis 🎉 and special chars!@#",
 					Done:  false,
-					UpdatedAt: time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC),
 				},
 			},
 			expectValid: true,
@@ -241,16 +250,20 @@ func TestETagGenerator_GenerateFromTasks_Consistency(t *testing.T) {
 	
 	tasks := []*models.Task{
 		{
-			Model: models.Model{ID: 1},
+			Model: gorm.Model{
+				ID:        1,
+				UpdatedAt: time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC),
+			},
 			Title: "Test Task",
 			Done:  false,
-			UpdatedAt: time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC),
 		},
 		{
-			Model: models.Model{ID: 2},
+			Model: gorm.Model{
+				ID:        2,
+				UpdatedAt: time.Date(2023, 1, 2, 12, 0, 0, 0, time.UTC),
+			},
 			Title: "Another Task",
 			Done:  true,
-			UpdatedAt: time.Date(2023, 1, 2, 12, 0, 0, 0, time.UTC),
 		},
 	}
 
@@ -270,28 +283,34 @@ func TestETagGenerator_GenerateFromTasks_DifferentTasks(t *testing.T) {
 
 	tasks1 := []*models.Task{
 		{
-			Model: models.Model{ID: 1},
+			Model: gorm.Model{
+				ID:        1,
+				UpdatedAt: time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC),
+			},
 			Title: "Task 1",
 			Done:  false,
-			UpdatedAt: time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC),
 		},
 	}
 
 	tasks2 := []*models.Task{
 		{
-			Model: models.Model{ID: 1},
+			Model: gorm.Model{
+				ID:        1,
+				UpdatedAt: time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC),
+			},
 			Title: "Task 1 Modified",
 			Done:  false,
-			UpdatedAt: time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC),
 		},
 	}
 
 	tasks3 := []*models.Task{
 		{
-			Model: models.Model{ID: 1},
+			Model: gorm.Model{
+				ID:        1,
+				UpdatedAt: time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC),
+			},
 			Title: "Task 1",
 			Done:  true, // Different done status
-			UpdatedAt: time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC),
 		},
 	}
 
@@ -309,17 +328,21 @@ func TestETagGenerator_GenerateFromTasks_OrderIndependent(t *testing.T) {
 	generator := NewETagGenerator()
 
 	task1 := &models.Task{
-		Model: models.Model{ID: 1},
+		Model: gorm.Model{
+			ID:        1,
+			UpdatedAt: time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC),
+		},
 		Title: "Task 1",
 		Done:  false,
-		UpdatedAt: time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC),
 	}
 
 	task2 := &models.Task{
-		Model: models.Model{ID: 2},
+		Model: gorm.Model{
+			ID:        2,
+			UpdatedAt: time.Date(2023, 1, 2, 12, 0, 0, 0, time.UTC),
+		},
 		Title: "Task 2",
 		Done:  true,
-		UpdatedAt: time.Date(2023, 1, 2, 12, 0, 0, 0, time.UTC),
 	}
 
 	// Generate ETags with different orders
@@ -334,10 +357,12 @@ func TestETagGenerator_GenerateFromTasks_ManualHashVerification(t *testing.T) {
 	generator := NewETagGenerator()
 
 	task := &models.Task{
-		Model: models.Model{ID: 1},
+		Model: gorm.Model{
+			ID:        1,
+			UpdatedAt: time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC),
+		},
 		Title: "Test Task",
 		Done:  false,
-		UpdatedAt: time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC),
 	}
 
 	tasks := []*models.Task{task}
@@ -398,22 +423,28 @@ func BenchmarkETagGenerator_GenerateFromTasks(b *testing.B) {
 	generator := NewETagGenerator()
 	tasks := []*models.Task{
 		{
-			Model: models.Model{ID: 1},
+			Model: gorm.Model{
+				ID:        1,
+				UpdatedAt: time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC),
+			},
 			Title: "Task 1",
 			Done:  false,
-			UpdatedAt: time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC),
 		},
 		{
-			Model: models.Model{ID: 2},
+			Model: gorm.Model{
+				ID:        2,
+				UpdatedAt: time.Date(2023, 1, 2, 12, 0, 0, 0, time.UTC),
+			},
 			Title: "Task 2",
 			Done:  true,
-			UpdatedAt: time.Date(2023, 1, 2, 12, 0, 0, 0, time.UTC),
 		},
 		{
-			Model: models.Model{ID: 3},
+			Model: gorm.Model{
+				ID:        3,
+				UpdatedAt: time.Date(2023, 1, 3, 12, 0, 0, 0, time.UTC),
+			},
 			Title: "Task 3",
 			Done:  false,
-			UpdatedAt: time.Date(2023, 1, 3, 12, 0, 0, 0, time.UTC),
 		},
 	}
 

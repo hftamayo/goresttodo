@@ -301,13 +301,14 @@ func TestHeaders_IsNotModified(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c, _ := setupTestContext()
 			
-			// Set the If-None-Match header
+			// Always set a request, even if If-None-Match is empty
+			c.Request = &http.Request{
+				Header: http.Header{},
+			}
+			
+			// Set the If-None-Match header if provided
 			if tt.ifNoneMatch != "" {
-				c.Request = &http.Request{
-					Header: http.Header{
-						"If-None-Match": []string{tt.ifNoneMatch},
-					},
-				}
+				c.Request.Header.Set("If-None-Match", tt.ifNoneMatch)
 			}
 			
 			result := headers.IsNotModified(c, tt.etag)
@@ -330,14 +331,14 @@ func TestHeaders_IsNotModified_EdgeCases(t *testing.T) {
 			name:         "whitespace in If-None-Match",
 			ifNoneMatch:  "  \"abc123\"  ",
 			etag:         "\"abc123\"",
-			expected:     false, // Current implementation doesn't trim whitespace
+			expected:     true, // Should trim whitespace and match
 			description:  "Should handle whitespace in If-None-Match header",
 		},
 		{
 			name:         "whitespace in ETag",
 			ifNoneMatch:  "\"abc123\"",
 			etag:         "  \"abc123\"  ",
-			expected:     false, // Current implementation doesn't trim whitespace
+			expected:     false, // ETag should not have whitespace
 			description:  "Should handle whitespace in ETag",
 		},
 		{
@@ -374,13 +375,14 @@ func TestHeaders_IsNotModified_EdgeCases(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c, _ := setupTestContext()
 			
-			// Set the If-None-Match header
+			// Always set a request, even if If-None-Match is empty
+			c.Request = &http.Request{
+				Header: http.Header{},
+			}
+			
+			// Set the If-None-Match header if provided
 			if tt.ifNoneMatch != "" {
-				c.Request = &http.Request{
-					Header: http.Header{
-						"If-None-Match": []string{tt.ifNoneMatch},
-					},
-				}
+				c.Request.Header.Set("If-None-Match", tt.ifNoneMatch)
 			}
 			
 			result := headers.IsNotModified(c, tt.etag)
