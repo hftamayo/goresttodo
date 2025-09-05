@@ -133,8 +133,9 @@ func TestLoadEnvVars(t *testing.T) {
 	})
 
 	t.Run("frontend origins parsing", func(t *testing.T) {
-		// Set required password
+		// Set required password and reset port
 		os.Setenv("POSTGRES_PASSWORD", "testpassword")
+		os.Setenv("GOAPP_PORT", "8080") // Reset to valid port
 
 		// Test single origin
 		os.Setenv("FRONTEND_ORIGINS", "http://localhost:3000")
