@@ -8,11 +8,28 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-type Cache struct {
-	RedisClient *redis.Client
+// RedisClientInterface defines the interface for Redis operations
+// This allows us to mock Redis operations in tests
+type RedisClientInterface interface {
+	Set(ctx context.Context, key string, value interface{}, expiration time.Duration) *redis.StatusCmd
+	Get(ctx context.Context, key string) *redis.StringCmd
+	Del(ctx context.Context, keys ...string) *redis.IntCmd
+	Scan(ctx context.Context, cursor uint64, match string, count int64) *redis.ScanCmd
+	SAdd(ctx context.Context, key string, members ...interface{}) *redis.IntCmd
+	SRem(ctx context.Context, key string, members ...interface{}) *redis.IntCmd
+	SMembers(ctx context.Context, key string) *redis.StringSliceCmd
+	Expire(ctx context.Context, key string, expiration time.Duration) *redis.BoolCmd
+	Incr(ctx context.Context, key string) *redis.IntCmd
+	HSet(ctx context.Context, key string, values ...interface{}) *redis.IntCmd
+	HMSet(ctx context.Context, key string, values ...interface{}) *redis.BoolCmd
+	Close() error
 }
 
-func NewCache(redisClient *redis.Client) *Cache {
+type Cache struct {
+	RedisClient RedisClientInterface
+}
+
+func NewCache(redisClient RedisClientInterface) *Cache {
 	return &Cache{RedisClient: redisClient}
 }
 

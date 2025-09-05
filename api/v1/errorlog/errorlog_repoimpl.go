@@ -4,14 +4,14 @@ import (
 	"context"
 	"time"
 
-	"github.com/redis/go-redis/v9"
+	"github.com/hftamayo/gotodo/pkg/utils"
 )
 
 type ErrorLogRepositoryImpl struct {
-	Redis *redis.Client
+	Redis utils.RedisClientInterface
 }
 
-func NewErrorLogRepositoryImpl(redisClient *redis.Client) *ErrorLogRepositoryImpl {
+func NewErrorLogRepositoryImpl(redisClient utils.RedisClientInterface) *ErrorLogRepositoryImpl {
 	return &ErrorLogRepositoryImpl{Redis: redisClient}
 }
 
@@ -22,5 +22,5 @@ func (r *ErrorLogRepositoryImpl) LogError(operation string, err error) error {
 		"error":     err.Error(),
 		"timestamp": time.Now().Format(time.RFC3339),
 	}
-	return r.Redis.HSet(ctx, "logs", time.Now().UnixNano(), logEntry).Err()
+	return r.Redis.HMSet(ctx, "logs", logEntry).Err()
 }

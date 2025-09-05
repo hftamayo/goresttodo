@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strconv"
@@ -56,6 +57,10 @@ func DefaultCacheConfig() *CacheConfig {
 
 // SetupCache creates a new cache instance with configuration
 func SetupCache(config *CacheConfig) (*utils.Cache, error) {
+	if config == nil {
+		return nil, fmt.Errorf("cache config cannot be nil")
+	}
+	
 	redisClient := redis.NewClient(&redis.Options{
 		Addr:            config.Host + ":" + config.Port,
 		DB:              config.DB,
@@ -71,11 +76,12 @@ func SetupCache(config *CacheConfig) (*utils.Cache, error) {
 	})
 
 	// Test the connection
-	ctx := redisClient.Context()
+	ctx := context.Background()
 	if err := redisClient.Ping(ctx).Err(); err != nil {
 		return nil, err
 	}
 
+	// The real redis.Client implements RedisClientInterface, so this will work
 	return utils.NewCache(redisClient), nil
 }
 
@@ -130,6 +136,12 @@ func (m *MemoryCache) Get(key string, dest interface{}) error {
 		
 		// For simplicity, we'll just copy the value
 		// In a real implementation, you'd want proper serialization
+		if destPtr, ok := dest.(*string); ok {
+			if strValue, ok := value.(string); ok {
+				*destPtr = strValue
+				return nil
+			}
+		}
 		if destPtr, ok := dest.(*interface{}); ok {
 			*destPtr = value
 			return nil
@@ -168,7 +180,7 @@ func (m *MemoryCache) InvalidateByTags(tags ...string) error {
 }
 
 // Legacy function for backward compatibility
-func SetupCacheLegacy(redisClient *redis.Client) *utils.Cache {
+func SetupCacheLegacy(redisClient utils.RedisClientInterface) *utils.Cache {
 	return utils.NewCache(redisClient)
 }
 

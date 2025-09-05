@@ -4,10 +4,9 @@ import (
 	"time"
 
 	"github.com/hftamayo/gotodo/pkg/utils"
-	"github.com/redis/go-redis/v9"
 )
 
-func SetupRateLimiter(redisClient *redis.Client, defaultLimit int, window time.Duration) *utils.RateLimiter {
+func SetupRateLimiter(redisClient utils.RedisClientInterface, defaultLimit int, window time.Duration) *utils.RateLimiter {
     rateLimiter := utils.NewRateLimiter(redisClient)
     
     rateLimiter.Window = window
