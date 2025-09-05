@@ -57,6 +57,10 @@ func DefaultCacheConfig() *CacheConfig {
 
 // SetupCache creates a new cache instance with configuration
 func SetupCache(config *CacheConfig) (*utils.Cache, error) {
+	if config == nil {
+		return nil, fmt.Errorf("cache config cannot be nil")
+	}
+	
 	redisClient := redis.NewClient(&redis.Options{
 		Addr:            config.Host + ":" + config.Port,
 		DB:              config.DB,
@@ -132,6 +136,12 @@ func (m *MemoryCache) Get(key string, dest interface{}) error {
 		
 		// For simplicity, we'll just copy the value
 		// In a real implementation, you'd want proper serialization
+		if destPtr, ok := dest.(*string); ok {
+			if strValue, ok := value.(string); ok {
+				*destPtr = strValue
+				return nil
+			}
+		}
 		if destPtr, ok := dest.(*interface{}); ok {
 			*destPtr = value
 			return nil
