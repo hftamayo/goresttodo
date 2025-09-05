@@ -2,7 +2,6 @@ package task
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -11,10 +10,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
-	"github.com/hftamayo/gotodo/api/v1/errorlog"
 	"github.com/hftamayo/gotodo/api/v1/models"
-	"github.com/hftamayo/gotodo/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"gorm.io/gorm"
@@ -69,6 +65,21 @@ func (m *MockTaskServiceInterface) MarkAsDone(id int) (*models.Task, error) {
 
 func (m *MockTaskServiceInterface) Delete(id int) error {
 	args := m.Called(id)
+	return args.Error(0)
+}
+
+func (m *MockTaskServiceInterface) InvalidateTaskCache(id int) error {
+	args := m.Called(id)
+	return args.Error(0)
+}
+
+func (m *MockTaskServiceInterface) InvalidateListCache() error {
+	args := m.Called()
+	return args.Error(0)
+}
+
+func (m *MockTaskServiceInterface) InvalidatePageCache() error {
+	args := m.Called()
 	return args.Error(0)
 }
 
@@ -409,7 +420,8 @@ func TestHandler_Update(t *testing.T) {
 			name:   "service error",
 			taskID: "1",
 			requestBody: map[string]interface{}{
-				"title": "Updated Task",
+				"title":       "Updated Task",
+				"description": "Updated Description",
 			},
 			setupMocks: func(mockService *MockTaskServiceInterface) {
 				mockService.On("Update", 1, mock.AnythingOfType("*models.Task")).Return(nil, errors.New("database error"))
