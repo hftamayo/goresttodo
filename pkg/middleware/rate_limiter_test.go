@@ -59,7 +59,52 @@ func (m *MockPipeliner) Exec(ctx interface{}) ([]redis.Cmder, error) {
 	return args.Get(0).([]redis.Cmder), args.Error(1)
 }
 
-func setupTestRouter(rateLimiter *utils.RateLimiter) *gin.Engine {
+func (m *MockRedisClient) Close() error {
+	args := m.Called()
+	return args.Error(0)
+}
+
+func (m *MockRedisClient) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) *redis.StatusCmd {
+	args := m.Called(ctx, key, value, expiration)
+	return args.Get(0).(*redis.StatusCmd)
+}
+
+func (m *MockRedisClient) Del(ctx context.Context, keys ...string) *redis.IntCmd {
+	args := m.Called(ctx, keys)
+	return args.Get(0).(*redis.IntCmd)
+}
+
+func (m *MockRedisClient) Scan(ctx context.Context, cursor uint64, match string, count int64) *redis.ScanCmd {
+	args := m.Called(ctx, cursor, match, count)
+	return args.Get(0).(*redis.ScanCmd)
+}
+
+func (m *MockRedisClient) SAdd(ctx context.Context, key string, members ...interface{}) *redis.IntCmd {
+	args := m.Called(ctx, key, members)
+	return args.Get(0).(*redis.IntCmd)
+}
+
+func (m *MockRedisClient) SRem(ctx context.Context, key string, members ...interface{}) *redis.IntCmd {
+	args := m.Called(ctx, key, members)
+	return args.Get(0).(*redis.IntCmd)
+}
+
+func (m *MockRedisClient) SMembers(ctx context.Context, key string) *redis.StringSliceCmd {
+	args := m.Called(ctx, key)
+	return args.Get(0).(*redis.StringSliceCmd)
+}
+
+func (m *MockRedisClient) HSet(ctx context.Context, key string, values ...interface{}) *redis.IntCmd {
+	args := m.Called(ctx, key, values)
+	return args.Get(0).(*redis.IntCmd)
+}
+
+func (m *MockRedisClient) HMSet(ctx context.Context, key string, values ...interface{}) *redis.BoolCmd {
+	args := m.Called(ctx, key, values)
+	return args.Get(0).(*redis.BoolCmd)
+}
+
+func setupRateLimiterTestRouter(rateLimiter *utils.RateLimiter) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.Use(RateLimiter(rateLimiter))
@@ -79,6 +124,13 @@ func setupTestRouter(rateLimiter *utils.RateLimiter) *gin.Engine {
 		c.Status(http.StatusOK)
 		c.JSON(http.StatusOK, gin.H{"message": "deleted"})
 	})
+	router.OPTIONS("/test", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+		c.JSON(http.StatusOK, gin.H{"message": "options"})
+	})
+	router.HEAD("/test", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
 	return router
 }
 
@@ -97,12 +149,10 @@ func TestRateLimiter(t *testing.T) {
 			method:   "GET",
 			clientIP: "192.168.1.1",
 			setupMock: func(mockRedis *MockRedisClient) {
-				// First request - increment counter
+				// First request - increment counter (returning 5 means it's not the first request)
 				mockRedis.On("Incr", mock.Anything, "rate_limit:192.168.1.1:60").Return(
 					redis.NewIntResult(5, nil))
-				// Set expiration for first request
-				mockRedis.On("Expire", mock.Anything, "rate_limit:192.168.1.1:60", time.Duration(60)*time.Second).Return(
-					redis.NewBoolResult(true, nil))
+				// No Expire call expected since currentCount != 1
 			},
 			expectedCode: http.StatusOK,
 			description:  "GET request should be allowed within read rate limit",
@@ -112,12 +162,10 @@ func TestRateLimiter(t *testing.T) {
 			method:   "POST",
 			clientIP: "192.168.1.2",
 			setupMock: func(mockRedis *MockRedisClient) {
-				// First request - increment counter
+				// First request - increment counter (returning 10 means it's not the first request)
 				mockRedis.On("Incr", mock.Anything, "rate_limit:192.168.1.2:60").Return(
 					redis.NewIntResult(10, nil))
-				// Set expiration for first request
-				mockRedis.On("Expire", mock.Anything, "rate_limit:192.168.1.2:60", time.Duration(60)*time.Second).Return(
-					redis.NewBoolResult(true, nil))
+				// No Expire call expected since currentCount != 1
 			},
 			expectedCode: http.StatusCreated,
 			description:  "POST request should be allowed within write rate limit",
@@ -129,8 +177,7 @@ func TestRateLimiter(t *testing.T) {
 			setupMock: func(mockRedis *MockRedisClient) {
 				mockRedis.On("Incr", mock.Anything, "rate_limit:192.168.1.3:60").Return(
 					redis.NewIntResult(25, nil))
-				mockRedis.On("Expire", mock.Anything, "rate_limit:192.168.1.3:60", time.Duration(60)*time.Second).Return(
-					redis.NewBoolResult(true, nil))
+				// No Expire call expected since currentCount != 1
 			},
 			expectedCode: http.StatusOK,
 			description:  "PUT request should be allowed within write rate limit",
@@ -142,8 +189,7 @@ func TestRateLimiter(t *testing.T) {
 			setupMock: func(mockRedis *MockRedisClient) {
 				mockRedis.On("Incr", mock.Anything, "rate_limit:192.168.1.4:60").Return(
 					redis.NewIntResult(30, nil))
-				mockRedis.On("Expire", mock.Anything, "rate_limit:192.168.1.4:60", time.Duration(60)*time.Second).Return(
-					redis.NewBoolResult(true, nil))
+				// No Expire call expected since currentCount != 1
 			},
 			expectedCode: http.StatusOK,
 			description:  "DELETE request should be allowed within write rate limit",
@@ -205,8 +251,7 @@ func TestRateLimiter(t *testing.T) {
 			setupMock: func(mockRedis *MockRedisClient) {
 				mockRedis.On("Incr", mock.Anything, "rate_limit:unknown:60").Return(
 					redis.NewIntResult(5, nil))
-				mockRedis.On("Expire", mock.Anything, "rate_limit:unknown:60", time.Duration(60)*time.Second).Return(
-					redis.NewBoolResult(true, nil))
+				// No Expire call expected since currentCount != 1
 			},
 			expectedCode: http.StatusOK,
 			description:  "Should handle empty client IP by using 'unknown'",
@@ -218,8 +263,7 @@ func TestRateLimiter(t *testing.T) {
 			setupMock: func(mockRedis *MockRedisClient) {
 				mockRedis.On("Incr", mock.Anything, "rate_limit:192.168.1.9:60").Return(
 					redis.NewIntResult(5, nil))
-				mockRedis.On("Expire", mock.Anything, "rate_limit:192.168.1.9:60", time.Duration(60)*time.Second).Return(
-					redis.NewBoolResult(true, nil))
+				// No Expire call expected since currentCount != 1
 			},
 			expectedCode: http.StatusOK,
 			description:  "OPTIONS request should be treated as read operation",
@@ -236,7 +280,7 @@ func TestRateLimiter(t *testing.T) {
 			rateLimiter := utils.NewRateLimiter(mockRedis)
 
 			// Setup router with rate limiter middleware
-			router := setupTestRouter(rateLimiter)
+			router := setupRateLimiterTestRouter(rateLimiter)
 
 			// Create test request
 			w := httptest.NewRecorder()
@@ -340,7 +384,7 @@ func TestRateLimiter_OperationTypes(t *testing.T) {
 			rateLimiter := utils.NewRateLimiter(mockRedis)
 
 			// Setup router with rate limiter middleware
-			router := setupTestRouter(rateLimiter)
+			router := setupRateLimiterTestRouter(rateLimiter)
 
 			// Create test request
 			w := httptest.NewRecorder()
@@ -367,13 +411,13 @@ func TestRateLimiter_Headers(t *testing.T) {
 	// Create mock Redis client
 	mockRedis := new(MockRedisClient)
 	mockRedis.On("Incr", mock.Anything, mock.Anything).Return(redis.NewIntResult(5, nil))
-	mockRedis.On("Expire", mock.Anything, mock.Anything, mock.Anything).Return(redis.NewBoolResult(true, nil))
+	// No Expire call expected since currentCount != 1
 
 	// Create rate limiter with mock Redis client
 	rateLimiter := utils.NewRateLimiter(mockRedis)
 
-	// Setup router with rate limiter middleware
-	router := setupTestRouter(rateLimiter)
+			// Setup router with rate limiter middleware
+		router := setupRateLimiterTestRouter(rateLimiter)
 
 	// Create test request
 	w := httptest.NewRecorder()
@@ -441,7 +485,7 @@ func TestRateLimiter_ClientIPExtraction(t *testing.T) {
 			rateLimiter := utils.NewRateLimiter(mockRedis)
 
 			// Setup router with rate limiter middleware
-			router := setupTestRouter(rateLimiter)
+			router := setupRateLimiterTestRouter(rateLimiter)
 
 			// Create test request
 			w := httptest.NewRecorder()
@@ -470,8 +514,8 @@ func TestRateLimiter_Performance(t *testing.T) {
 	// Create rate limiter with mock Redis client
 	rateLimiter := utils.NewRateLimiter(mockRedis)
 
-	// Setup router with rate limiter middleware
-	router := setupTestRouter(rateLimiter)
+			// Setup router with rate limiter middleware
+		router := setupRateLimiterTestRouter(rateLimiter)
 
 	// Test multiple concurrent requests
 	methods := []string{"GET", "POST", "PUT", "DELETE"}
@@ -503,8 +547,8 @@ func BenchmarkRateLimiter(b *testing.B) {
 	// Create rate limiter with mock Redis client
 	rateLimiter := utils.NewRateLimiter(mockRedis)
 
-	// Setup router with rate limiter middleware
-	router := setupTestRouter(rateLimiter)
+			// Setup router with rate limiter middleware
+		router := setupRateLimiterTestRouter(rateLimiter)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -525,8 +569,8 @@ func BenchmarkRateLimiter_Write(b *testing.B) {
 	// Create rate limiter with mock Redis client
 	rateLimiter := utils.NewRateLimiter(mockRedis)
 
-	// Setup router with rate limiter middleware
-	router := setupTestRouter(rateLimiter)
+			// Setup router with rate limiter middleware
+		router := setupRateLimiterTestRouter(rateLimiter)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

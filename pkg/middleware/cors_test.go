@@ -25,6 +25,31 @@ func setupTestRouter() *gin.Engine {
 	router.DELETE("/test", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
+	router.OPTIONS("/test", func(c *gin.Context) {
+		c.Status(http.StatusNoContent)
+	})
+	return router
+}
+
+func setupTestRouterWithCORS(corsMiddleware gin.HandlerFunc) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(corsMiddleware)
+	router.GET("/test", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+	router.POST("/test", func(c *gin.Context) {
+		c.Status(http.StatusCreated)
+	})
+	router.PATCH("/test", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+	router.DELETE("/test", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+	router.OPTIONS("/test", func(c *gin.Context) {
+		c.Status(http.StatusNoContent)
+	})
 	return router
 }
 
@@ -216,8 +241,7 @@ func TestCORSMiddleware(t *testing.T) {
 			}
 
 			// Setup router with CORS middleware
-			router := setupTestRouter()
-			router.Use(CORSMiddleware(envVars))
+			router := setupTestRouterWithCORS(CORSMiddleware(envVars))
 
 			// Create test request
 			w := httptest.NewRecorder()
@@ -257,8 +281,7 @@ func TestCORSMiddleware_AdditionalHeaders(t *testing.T) {
 		AppPort:   8080,
 	}
 
-	router := setupTestRouter()
-	router.Use(CORSMiddleware(envVars))
+	router := setupTestRouterWithCORS(CORSMiddleware(envVars))
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/test", nil)
@@ -293,8 +316,7 @@ func TestCORSMiddleware_Performance(t *testing.T) {
 		AppPort:   8080,
 	}
 
-	router := setupTestRouter()
-	router.Use(CORSMiddleware(envVars))
+	router := setupTestRouterWithCORS(CORSMiddleware(envVars))
 
 	// Test multiple requests to ensure consistent behavior
 	origins := []string{"http://localhost:3000", "http://app.example.com", "https://app.example.com"}
@@ -371,8 +393,7 @@ func TestCORSMiddleware_EdgeCases(t *testing.T) {
 				AppPort:   8080,
 			}
 
-			router := setupTestRouter()
-			router.Use(CORSMiddleware(envVars))
+			router := setupTestRouterWithCORS(CORSMiddleware(envVars))
 
 			w := httptest.NewRecorder()
 			req, _ := http.NewRequest("GET", "/test", nil)
@@ -391,8 +412,7 @@ func BenchmarkCORSMiddleware(b *testing.B) {
 		AppPort:   8080,
 	}
 
-	router := setupTestRouter()
-	router.Use(CORSMiddleware(envVars))
+	router := setupTestRouterWithCORS(CORSMiddleware(envVars))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -410,8 +430,7 @@ func BenchmarkCORSMiddleware_DisallowedOrigin(b *testing.B) {
 		AppPort:   8080,
 	}
 
-	router := setupTestRouter()
-	router.Use(CORSMiddleware(envVars))
+	router := setupTestRouterWithCORS(CORSMiddleware(envVars))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

@@ -264,8 +264,8 @@ func TestValidateUserMiddleware_InvalidJSON(t *testing.T) {
 		{
 			name:         "invalid JSON structure",
 			requestBody:  `{"invalid": "structure"}`,
-			expectedCode: http.StatusOK,
-			description:  "Request with invalid structure should pass to validation",
+			expectedCode: http.StatusBadRequest,
+			description:  "Request with invalid structure should be rejected at JSON decoding",
 		},
 	}
 
