@@ -26,6 +26,228 @@ Restful API for managing task persistence.
 
 # 4. Architectural Diagram
 
+## Complete System Architecture
+
+```mermaid
+graph TB
+    %% External Systems
+    Client[Client Applications]
+    Redis[(Redis Cache)]
+    Database[(Database)]
+
+    %% Infrastructure Layer
+    subgraph Infrastructure ["Infrastructure Layer"]
+        Docker[Docker Container]
+        Gin[Gin Web Server]
+    end
+
+    %% Primary Adapters (Driving)
+    subgraph PrimaryAdapters ["Primary Adapters (HTTP)"]
+        Router[Gin Router]
+        CORS[CORS Middleware]
+        RateLimit[Rate Limiter Middleware]
+        TaskHandler[Task Handler]
+    end
+
+    %% Core Hexagon
+    subgraph CoreDomain ["Core Domain (Hexagon)"]
+        subgraph Ports ["Ports (Interfaces)"]
+            TaskServicePort[TaskServiceInterface]
+            TaskRepoPort[TaskRepositoryInterface]
+            CachePort[CacheInterface]
+            ErrorLogPort[ErrorLoggerInterface]
+        end
+
+        subgraph Domain ["Domain Logic"]
+            TaskService[Task Service]
+            TaskModel[Task Model]
+            BusinessRules[Business Rules]
+        end
+    end
+
+    %% Secondary Adapters (Driven)
+    subgraph SecondaryAdapters ["Secondary Adapters"]
+        TaskRepoImpl[Task Repository Implementation]
+        CacheImpl[Redis Cache Implementation]
+        ErrorLogImpl[Error Logger Implementation]
+        ConfigManager[Configuration Manager]
+    end
+
+    %% API Endpoints Flow
+    subgraph APIEndpoints ["API Endpoints"]
+        GetTasks[GET /tasks/task]
+        GetTasksPage[GET /tasks/task/list/page]
+        GetTaskById[GET /tasks/task/:id]
+        PostTask[POST /tasks/task]
+        PutTask[PUT /tasks/task/:id]
+        PutTaskDone[PUT /tasks/task/:id/done]
+        DeleteTask[DELETE /tasks/task/:id]
+    end
+
+    %% Client to Infrastructure
+    Client --> Docker
+    Docker --> Gin
+
+    %% Request Flow Through Adapters
+    Gin --> Router
+    Router --> CORS
+    CORS --> RateLimit
+    RateLimit --> TaskHandler
+
+    %% API Endpoints to Handler
+    GetTasks --> TaskHandler
+    GetTasksPage --> TaskHandler
+    GetTaskById --> TaskHandler
+    PostTask --> TaskHandler
+    PutTask --> TaskHandler
+    PutTaskDone --> TaskHandler
+    DeleteTask --> TaskHandler
+
+    %% Primary Adapter to Domain
+    TaskHandler --> TaskServicePort
+    TaskServicePort --> TaskService
+
+    %% Domain Internal Flow
+    TaskService --> BusinessRules
+    TaskService --> TaskModel
+
+    %% Domain to Secondary Ports
+    TaskService --> TaskRepoPort
+    TaskService --> CachePort
+    TaskService --> ErrorLogPort
+
+    %% Secondary Ports to Adapters
+    TaskRepoPort --> TaskRepoImpl
+    CachePort --> CacheImpl
+    ErrorLogPort --> ErrorLogImpl
+
+    %% Secondary Adapters to External Systems
+    TaskRepoImpl --> Database
+    CacheImpl --> Redis
+
+    %% Rate Limiter to Redis
+    RateLimit --> Redis
+
+    %% Configuration Flow
+    ConfigManager --> TaskService
+    ConfigManager --> TaskRepoImpl
+    ConfigManager --> CacheImpl
+
+    %% Styling
+    classDef primary fill:#e1f5fe
+    classDef secondary fill:#f3e5f5
+    classDef domain fill:#e8f5e8
+    classDef external fill:#fff3e0
+    classDef infrastructure fill:#fce4ec
+
+    class TaskHandler,Router,CORS,RateLimit primary
+    class TaskRepoImpl,CacheImpl,ErrorLogImpl,ConfigManager secondary
+    class TaskService,TaskModel,BusinessRules,TaskServicePort,TaskRepoPort,CachePort,ErrorLogPort domain
+    class Client,Redis,Database external
+    class Docker,Gin infrastructure
+```
+
+## Data Flow Diagram
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant M as Middleware
+    participant H as Handler
+    participant S as Service
+    participant R as Repository
+    participant Cache as Redis Cache
+    participant DB as Database
+
+    %% Read Operation Flow
+    C->>+M: GET /tasks/task/list/page?page=1&limit=10
+    M->>M: Rate Limiting Check
+    M->>+H: Forward Request
+    H->>H: Validate Parameters
+    H->>+Cache: Check Cache
+    alt Cache Hit
+        Cache-->>H: Return Cached Data
+        H-->>C: HTTP 200 + Cached Response
+    else Cache Miss
+        H->>+S: ListByPage(page, limit, order)
+        S->>+R: FindByPage(page, limit, order)
+        R->>+DB: SQL Query
+        DB-->>-R: Task Records
+        R-->>-S: Domain Objects
+        S-->>-H: Business Logic Result
+        H->>Cache: Store in Cache (TTL: 30s)
+        H-->>-C: HTTP 200 + Fresh Data
+    end
+
+    %% Write Operation Flow
+    C->>+M: POST /tasks/task
+    M->>M: Rate Limiting Check (30/min)
+    M->>+H: Forward Request
+    H->>H: Validate Request Body
+    H->>+S: Create(task)
+    S->>S: Apply Business Rules
+    S->>+R: Create(task)
+    R->>+DB: INSERT Query
+    DB-->>-R: Created Record
+    R-->>-S: Domain Object
+    S->>Cache: Invalidate List Caches
+    S-->>-H: Created Task
+    H-->>-C: HTTP 201 + Created Task
+```
+
+## Cache Strategy Diagram
+
+```mermaid
+flowchart LR
+    subgraph CacheStrategy ["Cache Strategy"]
+        A[Request] --> B{Cache Check}
+        B -->|Hit| C[Return Cached Data]
+        B -->|Miss| D[Fetch from DB]
+        D --> E[Store in Cache]
+        E --> F[Return Fresh Data]
+
+        G[Write Operation] --> H[Update Database]
+        H --> I[Invalidate Related Caches]
+        I --> J{Cache Tags}
+        J -->|tasks:list| K[Invalidate List Caches]
+        J -->|task:id| L[Invalidate Specific Task Cache]
+        J -->|tasks:page:X| M[Invalidate Page Caches]
+    end
+
+    subgraph CacheKeys ["Cache Key Structure"]
+        N["task_123"]
+        O["tasks_page_1_limit_10_order_asc"]
+        P["tasks_cursor_abc123_limit_10_order_desc"]
+    end
+```
+
+## Rate Limiting Flow
+
+```mermaid
+flowchart TD
+    A[Incoming Request] --> B{Health Check?}
+    B -->|Yes| C[Skip Rate Limiting]
+    B -->|No| D[Determine Operation Type]
+
+    D --> E{HTTP Method}
+    E -->|GET| F{Prefetch Header?}
+    E -->|POST/PUT/DELETE| G[Write Operation: 30/min]
+
+    F -->|Yes| H[Prefetch Operation: 200/min]
+    F -->|No| I[Read Operation: 100/min]
+
+    G --> J[Check Redis Counter]
+    H --> J
+    I --> J
+
+    J --> K{Under Limit?}
+    K -->|Yes| L[Allow Request]
+    K -->|No| M[Return 429 + Retry-After]
+
+    L --> N[Continue to Handler]
+    M --> O[Client Waits]
+```
+
 ---
 
 # 5. Technical Specs
