@@ -1,35 +1,499 @@
-## Version History ##
+# 1. Overview
 
-### 0.0.3 ###
-- Gin as Web Framework
-- Gorm as ORM Framework
+Restful API for managing task persistence.
 
-### 0.0.2 ###
-- Fiber as Web framework
-- Postgres as datalayer
-- Improving function such as: data seeding and clean architecture
+---
 
-### 0.0.1 ###
-- On memory data: JSON
-- Architecture: Domain-Driven Design pattern and hexagonal architecture principles
+# 2. Level of complexity
 
-In DDD, the codebase is structured around the business domain. The main components of DDD are:
+==BEGINNER==: this version is properly for developer technical skills in the use of the technical stack, it is the foundational part for building projects of more complexity.
 
-- Entities (e.g., models): These are the business objects of the application.
-- Repositories (e.g., repository.go, repoimpl.go): These handle the storage and retrieval of entities.
-- Services (e.g., service.go): These implement business logic that doesn't naturally fit within entities.
-- Interfaces (e.g., handler.go): These define how the outside world interacts with the domain.
+---
 
-Hexagonal Architecture principles, where the business logic (the "domain") is at the center of the design and the infrastructure and interface details are at the outer layers. This allows the domain logic to be independent of any external concerns.
+# 3. Major Releases Timeline
 
+## 0.2.0
 
-### Useful commands ###
+- Released on September 2025
+- Unit tested
+- Spec coverage of 55%
 
-1. Initialize Go App: go mod init github.com/hftamayo/gotodo
-2. Install fiber v2: go get -u github.com/gofiber/fiber/v2
-3. Create frontend with yarn: yarn create vite client -- --template react-ts
-4. Install dependencies: yarn add @mantine/hooks @mantine/core swr @primer/octicons-react
-5. Run the project: go build main.go | go run main.go
+## 0.1.5
 
-### References ###
+- Special features such as rate limiting, caching using Redis
+
+---
+
+# 4. Architectural Diagram
+
+## Complete System Architecture
+
+```mermaid
+graph TB
+    %% External Systems
+    Client[Client Applications]
+    Redis[(Redis Cache)]
+    Database[(Database)]
+
+    %% Infrastructure Layer
+    subgraph Infrastructure ["Infrastructure Layer"]
+        Docker[Docker Container]
+        Gin[Gin Web Server]
+    end
+
+    %% Primary Adapters (Driving)
+    subgraph PrimaryAdapters ["Primary Adapters (HTTP)"]
+        Router[Gin Router]
+        CORS[CORS Middleware]
+        RateLimit[Rate Limiter Middleware]
+        TaskHandler[Task Handler]
+    end
+
+    %% Core Hexagon
+    subgraph CoreDomain ["Core Domain (Hexagon)"]
+        subgraph Ports ["Ports (Interfaces)"]
+            TaskServicePort[TaskServiceInterface]
+            TaskRepoPort[TaskRepositoryInterface]
+            CachePort[CacheInterface]
+            ErrorLogPort[ErrorLoggerInterface]
+        end
+
+        subgraph Domain ["Domain Logic"]
+            TaskService[Task Service]
+            TaskModel[Task Model]
+            BusinessRules[Business Rules]
+        end
+    end
+
+    %% Secondary Adapters (Driven)
+    subgraph SecondaryAdapters ["Secondary Adapters"]
+        TaskRepoImpl[Task Repository Implementation]
+        CacheImpl[Redis Cache Implementation]
+        ErrorLogImpl[Error Logger Implementation]
+        ConfigManager[Configuration Manager]
+    end
+
+    %% API Endpoints Flow
+    subgraph APIEndpoints ["API Endpoints"]
+        GetTasks[GET /tasks/task]
+        GetTasksPage[GET /tasks/task/list/page]
+        GetTaskById[GET /tasks/task/:id]
+        PostTask[POST /tasks/task]
+        PutTask[PUT /tasks/task/:id]
+        PutTaskDone[PUT /tasks/task/:id/done]
+        DeleteTask[DELETE /tasks/task/:id]
+    end
+
+    %% Client to Infrastructure
+    Client --> Docker
+    Docker --> Gin
+
+    %% Request Flow Through Adapters
+    Gin --> Router
+    Router --> CORS
+    CORS --> RateLimit
+    RateLimit --> TaskHandler
+
+    %% API Endpoints to Handler
+    GetTasks --> TaskHandler
+    GetTasksPage --> TaskHandler
+    GetTaskById --> TaskHandler
+    PostTask --> TaskHandler
+    PutTask --> TaskHandler
+    PutTaskDone --> TaskHandler
+    DeleteTask --> TaskHandler
+
+    %% Primary Adapter to Domain
+    TaskHandler --> TaskServicePort
+    TaskServicePort --> TaskService
+
+    %% Domain Internal Flow
+    TaskService --> BusinessRules
+    TaskService --> TaskModel
+
+    %% Domain to Secondary Ports
+    TaskService --> TaskRepoPort
+    TaskService --> CachePort
+    TaskService --> ErrorLogPort
+
+    %% Secondary Ports to Adapters
+    TaskRepoPort --> TaskRepoImpl
+    CachePort --> CacheImpl
+    ErrorLogPort --> ErrorLogImpl
+
+    %% Secondary Adapters to External Systems
+    TaskRepoImpl --> Database
+    CacheImpl --> Redis
+
+    %% Rate Limiter to Redis
+    RateLimit --> Redis
+
+    %% Configuration Flow
+    ConfigManager --> TaskService
+    ConfigManager --> TaskRepoImpl
+    ConfigManager --> CacheImpl
+
+    %% Styling
+    classDef primary fill:#e1f5fe
+    classDef secondary fill:#f3e5f5
+    classDef domain fill:#e8f5e8
+    classDef external fill:#fff3e0
+    classDef infrastructure fill:#fce4ec
+
+    class TaskHandler,Router,CORS,RateLimit primary
+    class TaskRepoImpl,CacheImpl,ErrorLogImpl,ConfigManager secondary
+    class TaskService,TaskModel,BusinessRules,TaskServicePort,TaskRepoPort,CachePort,ErrorLogPort domain
+    class Client,Redis,Database external
+    class Docker,Gin infrastructure
+```
+
+## Data Flow Diagram
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant M as Middleware
+    participant H as Handler
+    participant S as Service
+    participant R as Repository
+    participant Cache as Redis Cache
+    participant DB as Database
+
+    %% Read Operation Flow
+    C->>+M: GET /tasks/task/list/page?page=1&limit=10
+    M->>M: Rate Limiting Check
+    M->>+H: Forward Request
+    H->>H: Validate Parameters
+    H->>+Cache: Check Cache
+    alt Cache Hit
+        Cache-->>H: Return Cached Data
+        H-->>C: HTTP 200 + Cached Response
+    else Cache Miss
+        H->>+S: ListByPage(page, limit, order)
+        S->>+R: FindByPage(page, limit, order)
+        R->>+DB: SQL Query
+        DB-->>-R: Task Records
+        R-->>-S: Domain Objects
+        S-->>-H: Business Logic Result
+        H->>Cache: Store in Cache (TTL: 30s)
+        H-->>-C: HTTP 200 + Fresh Data
+    end
+
+    %% Write Operation Flow
+    C->>+M: POST /tasks/task
+    M->>M: Rate Limiting Check (30/min)
+    M->>+H: Forward Request
+    H->>H: Validate Request Body
+    H->>+S: Create(task)
+    S->>S: Apply Business Rules
+    S->>+R: Create(task)
+    R->>+DB: INSERT Query
+    DB-->>-R: Created Record
+    R-->>-S: Domain Object
+    S->>Cache: Invalidate List Caches
+    S-->>-H: Created Task
+    H-->>-C: HTTP 201 + Created Task
+```
+
+## Cache Strategy Diagram
+
+```mermaid
+flowchart LR
+    subgraph CacheStrategy ["Cache Strategy"]
+        A[Request] --> B{Cache Check}
+        B -->|Hit| C[Return Cached Data]
+        B -->|Miss| D[Fetch from DB]
+        D --> E[Store in Cache]
+        E --> F[Return Fresh Data]
+
+        G[Write Operation] --> H[Update Database]
+        H --> I[Invalidate Related Caches]
+        I --> J{Cache Tags}
+        J -->|tasks:list| K[Invalidate List Caches]
+        J -->|task:id| L[Invalidate Specific Task Cache]
+        J -->|tasks:page:X| M[Invalidate Page Caches]
+    end
+
+    subgraph CacheKeys ["Cache Key Structure"]
+        N["task_123"]
+        O["tasks_page_1_limit_10_order_asc"]
+        P["tasks_cursor_abc123_limit_10_order_desc"]
+    end
+```
+
+## Rate Limiting Flow
+
+```mermaid
+flowchart TD
+    A[Incoming Request] --> B{Health Check?}
+    B -->|Yes| C[Skip Rate Limiting]
+    B -->|No| D[Determine Operation Type]
+
+    D --> E{HTTP Method}
+    E -->|GET| F{Prefetch Header?}
+    E -->|POST/PUT/DELETE| G[Write Operation: 30/min]
+
+    F -->|Yes| H[Prefetch Operation: 200/min]
+    F -->|No| I[Read Operation: 100/min]
+
+    G --> J[Check Redis Counter]
+    H --> J
+    I --> J
+
+    J --> K{Under Limit?}
+    K -->|Yes| L[Allow Request]
+    K -->|No| M[Return 429 + Retry-After]
+
+    L --> N[Continue to Handler]
+    M --> O[Client Waits]
+```
+
+---
+
+# 5. Technical Specs
+
+## 5.1 Architectural Pattern: Hexagonal
+
+### Core Principles in This Project
+
+- **Domain-Centric Design**: Business logic is isolated from external concerns
+- **Ports**: Defined interfaces for interacting with the domain
+- **Adapters**: Implementations that connect external systems to the domain through ports
+- **Dependency Inversion**: Core domain depends on abstractions, not concrete implementations
+
+### Architectural Layers
+
+1. **Domain Layer** (Core Hexagon)
+
+   - Contains business entities (Task models)
+   - Domain services with core business logic
+   - No dependencies on external frameworks or libraries
+
+2. **Ports Layer** (Interfaces)
+
+   - **Primary/Driving Ports**: Service interfaces exposing domain functionality
+   - **Secondary/Driven Ports**: Repository interfaces defining storage requirements
+
+3. **Adapters Layer**
+   - **Primary/Driving Adapters**: HTTP handlers (Gin controllers) translating HTTP to domain calls
+   - **Secondary/Driven Adapters**: Repository implementations (GORM), cache adapters (Redis)
+
+### Flow of Control
+
+External requests → Primary Adapters → Primary Ports → Domain Logic → Secondary Ports → Secondary Adapters → External systems
+
+### Core Domain Features
+
+- Task management (core domain logic)
+- Status transitions (domain rules)
+- Validation logic (domain constraints)
+
+### Ports (Interfaces)
+
+- `TaskServiceInterface`: Primary port for task operations
+- `TaskRepositoryInterface`: Secondary port for task persistence
+- `CacheInterface`: Secondary port for caching operations
+
+### Adapters
+
+- **HTTP Handlers**: Primary adapters converting HTTP to domain calls
+- **GORM Repositories**: Secondary adapters implementing persistence ports
+- **Redis Cache**: Secondary adapter implementing cache port
+- **Rate Limiter**: Cross-cutting adapter for request throttling
+
+## 5.2 Technology Stack with Hexagonal Context
+
+- **Language**: Go 1.22.2 (Ideal for hexagonal due to interfaces and composition)
+- **Web Framework**: Gin (Primary adapter for HTTP)
+- **Database**: GORM (Secondary adapter for persistence)
+- **Cache**: Redis (Secondary adapter for caching)
+- **Rate Limiting**: Redis-based (Cross-cutting concern implemented as middleware)
+- **Containerization**: Docker (Infrastructure concern, isolated from domain)
+
+---
+
+# 6. API Endpoints (Primary Adapters)
+
+| Endpoint                | Method | Hexagonal Role                     | Cache Strategy                 | Rate Limit |
+| ----------------------- | ------ | ---------------------------------- | ------------------------------ | ---------- |
+| `/tasks/task`           | GET    | Primary adapter → TaskService port | 30s with ETag                  | 100/min    |
+| `/tasks/task/list/page` | GET    | Primary adapter → TaskService port | 30s with ETag                  | 100/min    |
+| `/tasks/task/:id`       | GET    | Primary adapter → TaskService port | 30s with ETag                  | 100/min    |
+| `/tasks/task`           | POST   | Primary adapter → TaskService port | Invalidates list caches        | 30/min     |
+| `/tasks/task/:id`       | PUT    | Primary adapter → TaskService port | Invalidates specific caches    | 30/min     |
+| `/tasks/task/:id/done`  | PUT    | Primary adapter → TaskService port | Invalidates specific caches    | 30/min     |
+| `/tasks/task/:id`       | DELETE | Primary adapter → TaskService port | Invalidates all related caches | 30/min     |
+
+---
+
+# 7. Request/Response Format (Domain Translation)
+
+### Task DTO (Data Transfer Object)
+
+```json
+{
+  "id": 1,
+  "title": "Task title",
+  "description": "Task description",
+  "done": false,
+  "owner": 1,
+  "created_at": "2023-06-05T10:15:30Z",
+  "updated_at": "2023-06-05T10:15:30Z"
+}
+```
+
+### Success Response (Adapter Translation Layer)
+
+```json
+{
+  "code": 200,
+  "resultMessage": "SUCCESS",
+  "data": {
+    /* domain object converted to DTO */
+  },
+  "timestamp": 1686061234,
+  "cacheTTL": 30
+}
+```
+
+### Error Response (Adapter Translation Layer)
+
+```json
+{
+  "code": 400,
+  "resultMessage": "OPERATION_FAILED",
+  "error": "Error description"
+}
+```
+
+### Primary Adapters (HTTP Handlers)
+
+- Translate HTTP requests to domain operations
+- Call appropriate service port methods
+- Transform domain objects to DTOs for response
+- Handle HTTP-specific concerns (status codes, headers)
+
+### Secondary Adapters (Repository Implementations)
+
+- GORM implementation of repository interfaces
+- Redis implementation of cache interfaces
+- Isolate infrastructure details from domain logic
+
+---
+
+# 8. Special features:
+
+## Cache Implementation in Hexagonal Context
+
+- **Cache Port**: Defines caching operations as interfaces
+- **Redis Adapter**: Implements cache port with Redis
+- **Domain Event Listeners**: Trigger cache invalidation on domain events
+- **Adapter-Specific Concerns**: TTL, serialization handled in adapter layer
+
+## Rate Limiting in Hexagonal Context
+
+- **Cross-cutting Concern**: Implemented as middleware (outside the hexagon)
+- **Primary Adapter Extension**: Enhances HTTP handling without touching domain
+- **Redis Adapter**: Secondary adapter for distributed rate limiting
+
+## Testing Strategy for Hexagonal Architecture
+
+- **Domain Tests**: Unit tests for core business logic
+- **Port Tests**: Tests ensuring port contracts are fulfilled
+- **Adapter Tests**: Tests for adapter implementations
+- **Mock Ports**: For testing adapters in isolation
+- **Integration Tests**: Test full flows through the hexagon
+
+## Benefits of Hexagonal Architecture in This Project
+
+1. **Testability**: Domain logic can be tested without infrastructure
+2. **Maintainability**: Clear separation of concerns and dependencies
+3. **Flexibility**: Ability to swap out adapters (e.g., change from Redis to another cache)
+4. **Focus on Domain**: Business rules are centralized and explicit
+5. **Technological Agnosticism**: Core business logic is independent of frameworks
+
+---
+
+# 9. Future Architectural Improvements
+
+- **Domain Events**: Expand event-driven architecture for better decoupling
+- **Anti-corruption Layer**: For integrating with external systems
+- **Command Query Responsibility Segregation (CQRS)**: Separate read and write models
+- **Bounded Contexts**: Define clear boundaries between different domain areas
+- Testing strategy needs to be implemented
+- Monitoring and observability are missing
+- Documentation could be enhanced
+
+---
+
+# 10. Branches
+
+1. ==Main==: it contains the latest deployed and published codebase, this one has been tested against unit, integration and end 2 end, also, there are special directories related to developer such as: devops (CI/CD pipelines), sshots (images for README file) and developer (diagrams, postman yaml files, documentation)
+
+2. ==Stage==: target branch for test the execution of the CI/CD pipelines, includes the interaction with the CI tools and cloud providers, the use of this branch is suggested for QA and DevOps teams. Pre-release version management, this one should be the only one merged with main branch.
+
+3. ==Unstable==: it containts the test codebase (unit, integration, end 2 end), it interacts with experimental and stage branches, must not merge with main.
+
+4. ==Experimental==: alpha version of the codebase, all features are built here, it interacts with unstable and stage, must not be merged directly with main branch.
+
+5. ==Refactor==: special feature requires by Experimental branch, the intention is to not affect the latest run version of the codebase contained in Experimental, if must be merged just with experimental branch.
+
+---
+
+# 11. Leftovers:
+
+##### 1.edge cases:
+
+- **Stale Cache After Service Restart**: Ensure Redis TTL values are reasonable to prevent very old data from being served
+- **Cache Stampede**: When cache expires, multiple requests might try to rebuild it simultaneously - implement singleflight pattern
+- **Cache Inconsistency**: If DB operations fail after cache invalidation, implement two-phase commit for critical operations
+- **Cache Size Limits**: Add cache eviction policies to prevent memory issues with large datasets
+- **Database Timeouts**: Add context with timeouts for all database operations
+- **Partial Updates**: Ensure transactions are used for operations that modify multiple records
+- **Race Conditions**: Implement optimistic locking for concurrent updates to the same record
+- **Connection Pool Exhaustion**: Set reasonable pool sizes and handle connection limits
+- **Malformed JSON**: Handle JSON parse errors gracefully
+- **Invalid UTF-8**: Ensure proper encoding handling for international text
+- **XSS Protection**: Sanitize inputs that might be displayed in UI
+- **Excessively Large Inputs**: Limit request body sizes and pagination parameters
+- **Token Expiration**: Gracefully handle expired tokens with clear error messages
+- **Rate Limit Bypass Attempts**: Check for distributed attacks across multiple IPs
+- **Permission Boundary Cases**: Verify edge cases where users might access resources they shouldn't
+- **Graceful Service Degradation**: When Redis or other dependencies are down, degrade gracefully
+- **Request Timeout Handling**: Add request-level timeouts to prevent hanging connections
+- **Health Check Endpoints**: Skip rate limiting and authentication for health checks
+- **Logging Overflow**: Protect against log flooding during error cascades
+- **Deadlocks**: Ensure consistent lock acquisition order across your codebase
+- **Fan-out Overload**: When spawning goroutines, use worker pools to limit concurrency
+- **Context Propagation**: Ensure context cancellation propagates through all operations
+- - **Handling Incomplete Downloads**: Include Content-Length headers and ETag validation
+- **Browser Cache Inconsistencies**: Test cache headers across different browsers
+- **Mobile Network Transitions**: Support resumable operations for mobile clients
+
+##### 2. Observability & Monitoring
+
+- Add structured logging for cache hits/misses
+- Implement metrics for cache effectiveness and rate limit hits
+- Add tracing for request flows through the system
+
+##### 3. Error Handling Improvements
+
+- Create consistent error response formats
+- Add correlation IDs for error tracking
+- Implement better validation error messages
+
+##### 4. Performance Optimizations
+
+- Add support for HTTP/2
+- Implement database query optimization
+- Consider adding background refresh for frequently accessed data
+
+##### 5. Security Enhancements
+
+- Add JWT validation
+- Implement role-based access control
+- Add request validation to prevent injection attacks
+
+### References
+
 [Original tutorial](https://youtu.be/QevhhM_QfbM?si=u-9zVUAnJWBmWJJY)
